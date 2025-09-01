@@ -518,7 +518,7 @@ struct Overload {
 
         const auto& fragment = Token->Packet.TxData->FragmentTable[0];
         int totalSentBytes = 0;
-        while (totalSentBytes != fragment.FragmentLength) {
+        while (totalSentBytes < fragment.FragmentLength) {
 #ifdef _MSC_VER
 #define MSG_NOSIGNAL 0
 #endif
@@ -533,40 +533,44 @@ struct Overload {
                 int err = WSAGetLastError();
                 if (err == WSAEWOULDBLOCK) {
                     // wait until socket is writable
-                    fd_set wfds;
-                    FD_ZERO(&wfds);
-                    FD_SET(tcpData->socket, &wfds);
+                    //fd_set wfds;
+                    //FD_ZERO(&wfds);
+                    //FD_SET(tcpData->socket, &wfds);
 
-                    int timeout_ms = -1; // no timeout
+                    //int timeout_ms = -1; // no timeout
 
-                    TIMEVAL tv;
-                    TIMEVAL* ptv = nullptr;
-                    if (timeout_ms >= 0) {
-                        tv.tv_sec = timeout_ms / 1000;
-                        tv.tv_usec = (timeout_ms % 1000) * 1000;
-                        ptv = &tv;
-                    }
+                    //TIMEVAL tv;
+                    //TIMEVAL* ptv = nullptr;
+                    //if (timeout_ms >= 0) {
+                    //    tv.tv_sec = timeout_ms / 1000;
+                    //    tv.tv_usec = (timeout_ms % 1000) * 1000;
+                    //    ptv = &tv;
+                    //}
 
-                    int ret = select(0, nullptr, &wfds, nullptr, ptv);
-                    if (ret <= 0) {
-                        // timeout or error
-                        Token->CompletionToken.Status = EFI_ABORTED;
-                        return EFI_ABORTED;
-                    }
+                    //int ret = select(0, nullptr, &wfds, nullptr, ptv);
+                    //if (ret <= 0) {
+                    //    // timeout or error
+                    //    Token->CompletionToken.Status = EFI_ABORTED;
+                    //    return EFI_ABORTED;
+                    //}
                     continue; // retry send
-                }
+				}
+				else {
+					Token->CompletionToken.Status = EFI_ABORTED;
+					return EFI_ABORTED;
+				}
 #else
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
-                    pollfd pfd;
-                    pfd.fd = tcpData->socket;
-                    pfd.events = POLLOUT;
-                    int ret = poll(&pfd, 1, -1);
-                    if (ret <= 0) {
-                        // timeout or error
-                        Token->CompletionToken.Status = EFI_ABORTED;
-                        return EFI_ABORTED;
-                    }
+                    //pollfd pfd;
+                    //pfd.fd = tcpData->socket;
+                    //pfd.events = POLLOUT;
+                    //int ret = poll(&pfd, 1, -1);
+                    //if (ret <= 0) {
+                    //    // timeout or error
+                    //    Token->CompletionToken.Status = EFI_ABORTED;
+                    //    return EFI_ABORTED;
+                    //}
                     continue; // retry
                 } else
                 {
@@ -654,6 +658,11 @@ struct Overload {
                 return EFI_ABORTED;
             }
         }
+
+#ifdef _MSC_VER
+        mode = 0;
+        ioctlsocket(tcpData->socket, FIONBIO, &mode);
+#endif
 
         return EFI_SUCCESS;
     }
