@@ -475,6 +475,15 @@ struct Overload {
     }
 
     static EFI_STATUS DestroyChild(IN void* This, IN EFI_HANDLE ChildHandle) {
+		// remove tcp4Protocol data from handle
+		if (tcpDataMap.contains(*(unsigned long long*)ChildHandle)) {
+			TcpData& tcpData = tcpDataMap[*(unsigned long long*)ChildHandle];
+			if (tcpData.socket != INVALID_SOCKET) {
+				closesocket(tcpData.socket);
+				tcpData.socket = INVALID_SOCKET;
+			}
+			tcpDataMap.erase(*(unsigned long long*)ChildHandle);
+		}
         freePool(ChildHandle);
         return EFI_SUCCESS;
     }
@@ -663,7 +672,7 @@ struct Overload {
         mode = 0;
         ioctlsocket(tcpData->socket, FIONBIO, &mode);
 #endif
-
+        Token->CompletionToken.Status = EFI_SUCCESS;
         return EFI_SUCCESS;
     }
 
@@ -679,7 +688,18 @@ struct Overload {
         }
 
         if (Tcp4State) {
-            *Tcp4State = Tcp4StateEstablished;
+			if (tcpDataMap.contains((unsigned long long)This)) {
+				TcpData& tcpData = tcpDataMap[(unsigned long long)This];
+				if (tcpData.socket == INVALID_SOCKET) {
+					*Tcp4State = Tcp4StateClosed;
+				}
+				else {
+					*Tcp4State = Tcp4StateEstablished;
+				}
+			}
+			else {
+				*Tcp4State = Tcp4StateClosed;
+			}
         }
 
         if (Tcp4ConfigData) {
@@ -699,6 +719,7 @@ struct Overload {
     }
 
     static EFI_STATUS Configure(IN void* This, IN EFI_TCP4_CONFIG_DATA* TcpConfigData OPTIONAL) {
+        static bool isGlobalSocketInitialized = false;
         if (!TcpConfigData) {
             return EFI_SUCCESS;
         }
@@ -709,7 +730,7 @@ struct Overload {
         data.socket = INVALID_SOCKET;
 
         // Global set up for accepting new connections
-        if ((unsigned long long)This == (unsigned long long)peerTcp4Protocol) {
+        if ((unsigned long long)This == (unsigned long long)peerTcp4Protocol && !isGlobalSocketInitialized) {
             #ifdef _MSC_VER
             WSADATA wsaData;
             if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -745,6 +766,7 @@ struct Overload {
 
             logToConsole(L"Socket binded");
             data.socket = sock;
+			isGlobalSocketInitialized = true;
         }
 
         unsigned long long key = (unsigned long long)This;
