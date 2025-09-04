@@ -4,10 +4,22 @@ The lite version of Qubic Core that can run directly on the OS without a UEFI en
 
 ## Build
 
+### Pre-build Binary
+
+Pre-build binary can be found here
 > Lite Executable <br>
 > [![Build](https://github.com/hackerby888/qubic-core-lite/actions/workflows/efi-build-develop.yml/badge.svg?branch=main)](https://github.com/hackerby888/qubic-core-lite/actions/workflows/efi-build-develop.yml)
 > <br>
 > The executable is located in `QubicLiteBuildOutput.zip/x64/Release/Qubic.exe`
+
+### Windows
+
+- Open .sln file in project root folder in Visual Studio
+- Change build config to Release -> Right click at Qubic project -> Build
+
+### Linux
+
+Detailed instruction can be found here: [Linux Build Tutorial](./README_CLANG.md)
 
 ## Prerequisites
 
@@ -56,14 +68,16 @@ static const unsigned char knownPublicPeers[][4] = {
 - An epoch will have `TESTNET_EPOCH_DURATION` (**3000**) ticks by default, you can change it in `public_settings.h`
 - You can deploy your own RPC server of local devnet [how to](https://qubic-sc-docs.pages.dev/rpc/setup-rpc)
 
+## FAQs
+
+- **My node stop ticking after restart, why?**
+Delete the **system** file at your current working folder, it may make your node start with wrong state.
+
 ## Supporting Platform
 
 - [x] Windows
-- [ ] Linux (Soon...)
+- [x] Linux
 
 ## Donate The Project
 
 QUBIC Wallet: QPROLAPACSPVBDQADRXXKRGZMXADUAEXXJIQNWPGWFUFUAITRXMHVODDLGBK
-
-
-

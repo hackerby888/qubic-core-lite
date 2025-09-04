@@ -8,6 +8,15 @@
 #elif defined(__linux__)
 #include <sched.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <poll.h>
 #endif
 
 #define CreateEvent CreateEvent
@@ -38,6 +47,45 @@ uint32_t getCurrentCpuIndex() {
 #endif
 }
 
+#ifndef _MSC_VER
+
+#define SOCKET int
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+#define closesocket close
+
+void setNonBlockingInput(bool enable) {
+    static termios oldt;
+    termios newt;
+
+    if (enable) {
+        // Save old settings
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+
+        // Disable canonical mode and echo
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+        // Set stdin non-blocking
+        fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+    } else {
+        // Restore old settings
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        fcntl(STDIN_FILENO, F_SETFL, 0);
+    }
+}
+
+std::vector<unsigned char> readInput() {
+    std::vector<unsigned char> buffer;
+    unsigned char c;
+    while (read(STDIN_FILENO, &c, 1) == 1) {
+        buffer.push_back(c);
+    }
+    return buffer;
+}
+#endif
+
 inline void* qVirtualAlloc(const unsigned long long size, bool commitMem = false) {
 	return VirtualAlloc(NULL, (SIZE_T)size, MEM_RESERVE | (commitMem ? MEM_COMMIT : 0), PAGE_READWRITE);
 }
@@ -66,7 +114,7 @@ void updateTime() {
 
 unsigned long long now_ms()
 {
-    return ms(unsigned char(utcTime.Year % 100), utcTime.Month, utcTime.Day, utcTime.Hour, utcTime.Minute, utcTime.Second, utcTime.Nanosecond / 1000000);
+    return ms((unsigned char)utcTime.Year % 100, utcTime.Month, utcTime.Day, utcTime.Hour, utcTime.Minute, utcTime.Second, utcTime.Nanosecond / 1000000);
 }
 
 void setMem(void* buffer, unsigned long long size, unsigned char value)
@@ -127,13 +175,35 @@ struct Overload {
     // Directly call the setup function without using custom stack.
     static void startThread(EFI_AP_PROCEDURE procedure, void* data, unsigned long long ProcessorNumber, EFI_EVENT WaitEvent, unsigned long long TimeoutInMicroseconds) {
 		bool isThreadFinished = false;
-        std::thread thread([&isThreadFinished, procedure, data]() {
+        std::thread thread([&isThreadFinished, procedure, data, ProcessorNumber]() {
+           /* while (true) {
+                unsigned long long currentProcessorNumber;
+                WhoAmI(NULL, &currentProcessorNumber);
+                if (currentProcessorNumber == ProcessorNumber) {
+                    break;
+                } else {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }*/
             CustomStack* me = reinterpret_cast<CustomStack*>(data);
-            me->setupFuncToCall(me->setupDataToPass);
+            me->setupFuncToCall(me->setupDataToPass, ProcessorNumber);
             isThreadFinished = true;
             });
+
+        #ifdef _MSC_VER
         HANDLE hThread = (HANDLE)thread.native_handle();
         SetThreadAffinityMask(hThread, 1ULL << ProcessorNumber);
+        #else
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(ProcessorNumber, &cpuset);
+        int rc = pthread_setaffinity_np(thread.native_handle(),
+                                    sizeof(cpu_set_t),
+                                    &cpuset);
+        if (rc != 0) {
+            logToConsole(L"Error calling pthread_setaffinity_np");
+        }
+        #endif
 
         if (TimeoutInMicroseconds > 0) {
             thread.detach();
@@ -151,7 +221,11 @@ struct Overload {
             }
 
             if (!isThreadFinished) {
+                #ifdef _MSC_VER
                 TerminateThread(hThread, 0); // Forcefully terminate the thread if it doesn't finish
+                #else
+                pthread_cancel(thread.native_handle());
+                #endif
             }
         }
 
@@ -300,6 +374,7 @@ struct Overload {
     }
 
     static EFI_STATUS ReadKeyStroke(IN void* This, OUT EFI_INPUT_KEY* Key) {
+#ifdef _MSC_VER
         if (_kbhit()) {               // check if key was pressed
             int ch = _getch();        // now it's safe to read
             if (ch == 27) {
@@ -332,6 +407,44 @@ struct Overload {
 
             return EFI_SUCCESS;
         }
+#else
+        static std::map<std::vector<unsigned char>, std::string> keyMap = {
+            {{27,79,80}, "F1"}, {{27,79,81}, "F2"},
+            {{27,79,82}, "F3"}, {{27,79,83}, "F4"},
+            {{27,91,49,53,126}, "F5"}, {{27,91,49,55,126}, "F6"},
+            {{27,91,49,56,126}, "F7"}, {{27,91,49,57,126}, "F8"},
+            {{27,91,50,48,126}, "F9"}, {{27,91,50,49,126}, "F10"},
+            {{27,91,50,51,126}, "F11"}, {{27,91,50,52,126}, "F12"}
+        };
+
+        std::vector<unsigned char> input = readInput();
+        if (!input.empty()) {
+            // Try to match against known sequences
+            if (keyMap.count(input)) {
+                // Map f2->f12 to EFI_INPUT_KEY
+                std::string keyName = keyMap[input];
+
+                if (keyName == "F2")  Key->ScanCode = 0x0C;
+                else if (keyName == "F3")  Key->ScanCode = 0x0D;
+                else if (keyName == "F4")  Key->ScanCode = 0x0E;
+                else if (keyName == "F5")  Key->ScanCode = 0x0F;
+                else if (keyName == "F6")  Key->ScanCode = 0x10;
+                else if (keyName == "F7")  Key->ScanCode = 0x11;
+                else if (keyName == "F8")  Key->ScanCode = 0x12;
+                else if (keyName == "F9")  Key->ScanCode = 0x13;
+                else if (keyName == "F10") Key->ScanCode = 0x14;
+                else if (keyName == "F11") Key->ScanCode = 0x15;
+                else if (keyName == "F12") Key->ScanCode = 0x16;
+            } else {
+                // map 'p' to fake pause key
+                if (input.size() == 1 && input[0] == 'p') {
+                    Key->ScanCode = 0x48;
+                }
+            }
+
+            return EFI_SUCCESS;
+        }
+#endif
 
         return EFI_NOT_READY;
     }
@@ -374,6 +487,15 @@ struct Overload {
     }
 
     static EFI_STATUS DestroyChild(IN void* This, IN EFI_HANDLE ChildHandle) {
+		// remove tcp4Protocol data from handle
+		if (tcpDataMap.contains(*(unsigned long long*)ChildHandle)) {
+			TcpData& tcpData = tcpDataMap[*(unsigned long long*)ChildHandle];
+			if (tcpData.socket != INVALID_SOCKET) {
+				closesocket(tcpData.socket);
+				tcpData.socket = INVALID_SOCKET;
+			}
+			tcpDataMap.erase(*(unsigned long long*)ChildHandle);
+		}
         freePool(ChildHandle);
         return EFI_SUCCESS;
     }
@@ -415,27 +537,76 @@ struct Overload {
             return EFI_UNSUPPORTED;
         }
 
-        // Send data in thread to make sure send does not block the thread and send all bytes
-        std::thread sendThread([tcpData, Token]() {
-            const auto& fragment = Token->Packet.TxData->FragmentTable[0];
-            int totalSentBytes = 0;
-            while (totalSentBytes != fragment.FragmentLength) {
-                int sentBytes = send(tcpData->socket, (const char*)fragment.FragmentBuffer + totalSentBytes, fragment.FragmentLength - totalSentBytes, 0);
-                if (sentBytes == SOCKET_ERROR) {
-                    Token->CompletionToken.Status = EFI_ABORTED;
-                    return;
+        const auto& fragment = Token->Packet.TxData->FragmentTable[0];
+        int totalSentBytes = 0;
+        while (totalSentBytes < fragment.FragmentLength) {
+#ifdef _MSC_VER
+#define MSG_NOSIGNAL 0
+#define MSG_DONTWAIT 0
+#endif
+            int sentBytes = send(tcpData->socket, (const char*)fragment.FragmentBuffer + totalSentBytes, fragment.FragmentLength - totalSentBytes, MSG_NOSIGNAL | MSG_DONTWAIT);
+            if (sentBytes == 0) {
+                // connection closed
+                Token->CompletionToken.Status = -1;
+                return EFI_ABORTED;
+            } else if (sentBytes == SOCKET_ERROR)
+            {
+#ifdef _MSC_VER
+                int err = WSAGetLastError();
+                if (err == WSAEWOULDBLOCK) {
+                    // // wait until socket is writable
+                    // fd_set wfds;
+                    // FD_ZERO(&wfds);
+                    // FD_SET(tcpData->socket, &wfds);
+                    //
+                    // int timeout_ms = 500; // no timeout
+                    //
+                    // TIMEVAL tv;
+                    // TIMEVAL* ptv = nullptr;
+                    // if (timeout_ms >= 0) {
+                    //     tv.tv_sec = timeout_ms / 1000;
+                    //     tv.tv_usec = (timeout_ms % 1000) * 1000;
+                    //     ptv = &tv;
+                    // }
+                    //
+                    // int ret = select(0, nullptr, &wfds, nullptr, ptv);
+                    // if (ret <= 0) {
+                    //     // timeout or error
+                    //     Token->CompletionToken.Status = -1;
+                    //     return EFI_ABORTED;
+                    // }
+                    continue; // retry send
+				}
+				else {
+					Token->CompletionToken.Status = -1;
+					return EFI_ABORTED;
+				}
+#else
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                {
+                    // pollfd pfd;
+                    // pfd.fd = tcpData->socket;
+                    // pfd.events = POLLOUT;
+                    // int ret = poll(&pfd, 1, -1);
+                    // if (ret <= 0) {
+                    //     // timeout or error
+                    //     Token->CompletionToken.Status = -1;
+                    //     return EFI_ABORTED;
+                    // }
+                    continue; // retry
+                } else
+                {
+                    Token->CompletionToken.Status = -1;
+                    return EFI_ABORTED;
                 }
-
+#endif
+            } else
+            {
                 totalSentBytes += sentBytes;
             }
+        }
 
-            Token->CompletionToken.Status = EFI_SUCCESS;
-            /*  setText(message, L"Sent ");
-              appendNumber(message, totalSentBytes, TRUE);
-              appendText(message, L" bytes");
-              logToConsole(message);*/
-            });
-        sendThread.detach();
+        Token->CompletionToken.Status = EFI_SUCCESS;
 
         return EFI_SUCCESS;
     }
@@ -456,28 +627,56 @@ struct Overload {
             return EFI_ABORTED;
         }
 
-        // receive data in a thread to avoid blocking the main thread
-        std::thread receiveThread([tcpData, Token]() {
-            char buffer[1024];
-            memset(buffer, 0, sizeof(buffer));
+        char buffer[8 * 1024];
+        int totalReceivedBytes = 0;
+        memset(buffer, 0, sizeof(buffer));
+        Token->Packet.RxData->DataLength = 0;
 
-            int bytes = recv(tcpData->socket, buffer, sizeof(buffer), 0);
-
-            if (bytes > 0) {
-                memcpy(Token->Packet.RxData->FragmentTable[0].FragmentBuffer, buffer, bytes);
-                Token->Packet.RxData->DataLength = bytes;
-                Token->CompletionToken.Status = EFI_SUCCESS;
-                /*  setText(message, L"Received ");
-                  appendNumber(message, bytes, TRUE);
-                  appendText(message, L" bytes");
-                  logToConsole(message);*/
+        while (true)
+        {
+#ifdef _MSC_VER
+#define MSG_DONTWAIT 0
+#endif
+            int bytes = recv(tcpData->socket, buffer, sizeof(buffer), MSG_DONTWAIT);
+            if (bytes > 0)
+            {
+                memcpy((char *)Token->Packet.RxData->FragmentTable[0].FragmentBuffer + totalReceivedBytes, buffer, bytes);
+                totalReceivedBytes += bytes;
+                Token->Packet.RxData->DataLength += bytes;
+            } else if (bytes == SOCKET_ERROR)
+            {
+#ifdef _MSC_VER
+                int err = WSAGetLastError();
+                if (err == WSAEWOULDBLOCK) {
+                    // nothing left to read right now
+                    Token->CompletionToken.Status = EFI_SUCCESS;
+                    break;
+                } else {
+                    // real error
+                    Token->CompletionToken.Status = -1;
+                    return EFI_ABORTED;
+                }
+#else
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                {
+                    // nothing left to read right now
+                    Token->CompletionToken.Status = EFI_SUCCESS;
+                    break;
+                } else
+                {
+                    Token->CompletionToken.Status = -1;
+                    return EFI_ABORTED;
+                }
+#endif
+            } else if (bytes == 0)
+            {
+                // connection closed, mark status as error to reconnect in main thread
+                Token->CompletionToken.Status = -1;
+                return EFI_CONNECTION_FIN;
             }
-            else {
-                Token->CompletionToken.Status = EFI_ABORTED;
-            }
-            });
-        receiveThread.detach();
+        }
 
+        Token->CompletionToken.Status = EFI_SUCCESS;
         return EFI_SUCCESS;
     }
 
@@ -493,7 +692,18 @@ struct Overload {
         }
 
         if (Tcp4State) {
-            *Tcp4State = Tcp4StateEstablished;
+			if (tcpDataMap.contains((unsigned long long)This)) {
+				TcpData& tcpData = tcpDataMap[(unsigned long long)This];
+				if (tcpData.socket == INVALID_SOCKET) {
+					*Tcp4State = Tcp4StateClosed;
+				}
+				else {
+					*Tcp4State = Tcp4StateEstablished;
+				}
+			}
+			else {
+				*Tcp4State = Tcp4StateClosed;
+			}
         }
 
         if (Tcp4ConfigData) {
@@ -513,6 +723,7 @@ struct Overload {
     }
 
     static EFI_STATUS Configure(IN void* This, IN EFI_TCP4_CONFIG_DATA* TcpConfigData OPTIONAL) {
+        static bool isGlobalSocketInitialized = false;
         if (!TcpConfigData) {
             return EFI_SUCCESS;
         }
@@ -522,17 +733,15 @@ struct Overload {
         data.isGlobal = *((unsigned int*)TcpConfigData->AccessPoint.RemoteAddress.Addr) == 0;
         data.socket = INVALID_SOCKET;
 
-        setText(message, L"Configure ");
-        appendIPv4Address(message, *(IPv4Address*)TcpConfigData->AccessPoint.RemoteAddress.Addr);
-        logToConsole(message);
-
         // Global set up for accepting new connections
-        if ((unsigned long long)This == (unsigned long long)peerTcp4Protocol) {
+        if ((unsigned long long)This == (unsigned long long)peerTcp4Protocol && !isGlobalSocketInitialized) {
+            #ifdef _MSC_VER
             WSADATA wsaData;
             if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
                 logToConsole(L"WSAStartup failed!!");
                 return EFI_ABORTED;
             }
+            #endif
 
             SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
             if (sock == INVALID_SOCKET) {
@@ -561,6 +770,7 @@ struct Overload {
 
             logToConsole(L"Socket binded");
             data.socket = sock;
+			isGlobalSocketInitialized = true;
         }
 
         unsigned long long key = (unsigned long long)This;
@@ -586,13 +796,22 @@ struct Overload {
             addr.sin_family = AF_INET;
             addr.sin_port = htons(tcpData->configData.AccessPoint.StationPort);
             addr.sin_addr.s_addr = INADDR_ANY;
+            #ifdef _MSC_VER
             int addrlen = sizeof(addr);
+            #else
+            socklen_t addrlen = sizeof(addr);
+            #endif
             SOCKET clientSocket = accept(tcpData->socket, (sockaddr*)&addr, &addrlen);
             if (clientSocket == INVALID_SOCKET) {
                 logToConsole(L"Obtained tcpData failed");
                 ListenToken->CompletionToken.Status = EFI_ABORTED;
                 return;
             }
+
+#ifdef _MSC_VER
+            u_long mode = 1;
+            ioctlsocket(clientSocket, FIONBIO, &mode);
+#endif
 
             CreateChild(NULL, &ListenToken->NewChildHandle);
             // At this point we dont know the tcp4Protocol for this peer (tcp4Protocol will be inititialzed in peerConnectionNewlyEstablished())
@@ -626,7 +845,16 @@ struct Overload {
         sockaddr_in serverAddr{};
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(tcpData->configData.AccessPoint.RemotePort);
+        #ifdef _MSC_VER
         serverAddr.sin_addr.S_un.S_addr = *((unsigned long*)tcpData->configData.AccessPoint.RemoteAddress.Addr);
+        #else
+        serverAddr.sin_addr.s_addr = *((unsigned long*)tcpData->configData.AccessPoint.RemoteAddress.Addr);
+        #endif
+
+#ifdef _MSC_VER
+        u_long mode = 1;
+        ioctlsocket(tcpData->socket, FIONBIO, &mode);
+#endif
 
         // connect in a thread
         std::thread connectThread([tcpData, serverAddr, ConnectionToken]() {
@@ -643,6 +871,21 @@ struct Overload {
     }
 
     static void initializeUefi() {
+        #ifndef _MSC_VER
+        setNonBlockingInput(true);
+
+        // Pin the main thread to CPU 0 to make sure main thread cpu id wont change during process
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(0, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        #else
+        // Pin the main thread to CPU 0 to make sure main thread cpu id wont change during process
+		// NOTE: In MSVC Release Mode, so the scheduler often just keeps the main thread on one CPU core (the best core), dont need to set affinity because it will slow down the main thread performance
+        //HANDLE hThread = GetCurrentThread();
+        //SetThreadAffinityMask(hThread, 1ULL << 0);
+        #endif
+
         ih = new EFI_HANDLE;
         st = new EFI_SYSTEM_TABLE;
         st->BootServices = new EFI_BOOT_SERVICES;

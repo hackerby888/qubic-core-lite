@@ -3,13 +3,23 @@
 #include <vector>
 #include <thread>
 #include <lib/platform_efi/uefi_globals.h>
+#ifdef __linux__
+#include <string.h>
+#include <stdio.h>
+#include <byteswap.h>
+#include <stdatomic.h>
+#include <codecvt>
+#include <locale>
+#include "extensions/utils.h"
+#endif
 
 #define TESTNET
 #define REAL_NODE
 #define NO_UEFI
 #define SINGLE_COMPILE_UNIT
-#define private public
+#ifdef _WIN32
 #define system qsystem
+#endif
 
 // contract_def.h needs to be included first to make sure that contracts have minimal access
 #include "contract_core/contract_def.h"
@@ -83,8 +93,11 @@
 #include "revenue.h"
 
 #include "extensions/overload.h"
+
+#ifdef _WIN32
 #undef system
 #define system qsystem
+#endif
 
 ////////// Qubic \\\\\\\\\\
 
@@ -317,7 +330,7 @@ static struct {
 } emptyTickResolver;
 
 static struct {
-    static constexpr unsigned long long MAX_WAITING_TIME = 60000; // time to trigger resending tick votes
+    unsigned long long MAX_WAITING_TIME = 60000; // time to trigger resending tick votes
     unsigned int lastTick;
     unsigned int lastTickMode; // 0 AUX - 1 MAIN
     unsigned long long lastCheck;
@@ -402,12 +415,6 @@ static inline bool isMainMode()
 // NOTE: this function doesn't work well on a few CPUs, some bits will be flipped after calling this. It's probably microcode bug.
 static void enableAVX()
 {
-    __writecr4(__readcr4() | 0x40000);
-    _xsetbv(_XCR_XFEATURE_ENABLED_MASK, _xgetbv(_XCR_XFEATURE_ENABLED_MASK) | (7
-#ifdef __AVX512F__
-        | 224
-#endif
-        ));
 }
 
 // Should only be called from tick processor to avoid concurrent state changes, which can cause race conditions as detailed in FIXME below.
@@ -2051,11 +2058,11 @@ static void updateNumberOfTickTransactions()
 // Probably, this was caused by a bug in the optimizer, because disabling the optimizer solved the
 // problem.
 OPTIMIZE_OFF()
-static void requestProcessor(void* ProcedureArgument)
+static void requestProcessor(void* ProcedureArgument, unsigned long long processorNumber)
 {
     enableAVX();
 
-    const unsigned long long processorNumber = getRunningProcessorID();
+    //const unsigned long long processorNumber = getRunningProcessorID();
 
     Processor* processor = (Processor*)ProcedureArgument;
     RequestResponseHeader* header = (RequestResponseHeader*)processor->buffer;
@@ -2332,13 +2339,13 @@ static void requestProcessor(void* ProcedureArgument)
 }
 OPTIMIZE_ON()
 
-static void contractProcessor(void*)
+static void contractProcessor(void*, unsigned long long processorNumber)
 {
     enableAVX();
 
     PROFILE_SCOPE();
 
-    const unsigned long long processorNumber = getRunningProcessorID();
+    //const unsigned long long processorNumber = getRunningProcessorID();
 
     unsigned int executedContractIndex;
     switch (contractProcessorPhase)
@@ -2482,7 +2489,7 @@ static void contractProcessor(void*)
 
 // Notify dest of incoming transfer if dest is a contract.
 // CAUTION: Cannot be called from contract processor or main processor! If called from QPI functions, it will get stuck.
-static void notifyContractOfIncomingTransfer(const m256i& source, const m256i& dest, long long amount, unsigned char type)
+void notifyContractOfIncomingTransfer(const m256i& source, const m256i& dest, long long amount, unsigned char type)
 {
     // Only notify if amount > 0 and dest is contract
     if (amount <= 0 || dest.u64._0 >= contractCount || dest.u64._1 || dest.u64._2 || dest.u64._3)
@@ -4894,10 +4901,11 @@ static bool isTickTimeOut()
 // Probably, this was caused by a bug in the optimizer, because disabling the optimizer solved the
 // problem.
 OPTIMIZE_OFF()
-static void tickProcessor(void*)
+static void tickProcessor(void*, unsigned long long processorNumber)
 {
     enableAVX();
-    const unsigned long long processorNumber = getRunningProcessorID();
+
+    //const unsigned long long processorNumber = getRunningProcessorID();
 
 #if !START_NETWORK_FROM_SCRATCH
     // only init first tick if it doesn't load all node states from file
@@ -5797,9 +5805,9 @@ static bool initialize()
             return false;
         }
 
-        if ((status = createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, emptyCallback, NULL, &peers[i].connectAcceptToken.CompletionToken.Event))
-            || (status = createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, emptyCallback, NULL, &peers[i].receiveToken.CompletionToken.Event))
-            || (status = createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, emptyCallback, NULL, &peers[i].transmitToken.CompletionToken.Event)))
+        if ((status = createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, (void*)&emptyCallback, NULL, &peers[i].connectAcceptToken.CompletionToken.Event))
+            || (status = createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, (void*)&emptyCallback, NULL, &peers[i].receiveToken.CompletionToken.Event))
+            || (status = createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, (void*)&emptyCallback, NULL, &peers[i].transmitToken.CompletionToken.Event)))
         {
             logStatusToConsole(L"EFI_BOOT_SERVICES.CreateEvent() fails", status, __LINE__);
 
@@ -6829,7 +6837,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
         unsigned long long numberOfAllProcessors, numberOfEnabledProcessors;
         mpServicesProtocol->GetNumberOfProcessors(mpServicesProtocol, &numberOfAllProcessors, &numberOfEnabledProcessors);
         mpServicesProtocol->WhoAmI(mpServicesProtocol, &mainThreadProcessorID); // get the proc Id of main thread (for later use)
-
         registerAsynFileIO(mpServicesProtocol);
         
         // Initialize resource management
@@ -6888,7 +6895,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                         requestProcessorIDs[nRequestProcessorIDs++] = i;
                     }
 
-                    createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, shutdownCallback, NULL, &processors[numberOfProcessors].event);
+                    createEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, (void*)&shutdownCallback, NULL, &processors[numberOfProcessors].event);
                     mpServicesProtocol->StartupThisAP(mpServicesProtocol, Processor::runFunction, i, processors[numberOfProcessors].event, 0, &processors[numberOfProcessors], NULL);
 
                     #if !defined(NDEBUG)
@@ -6993,7 +7000,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                 if (contractProcessorState == 1)
                 {
                     contractProcessorState = 2;
-                    createEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY, contractProcessorShutdownCallback, NULL, &contractProcessorEvent);
+                    createEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY, (void*)&contractProcessorShutdownCallback, NULL, &contractProcessorEvent);
                     mpServicesProtocol->StartupThisAP(mpServicesProtocol, Processor::runFunction, contractProcessorIDs[0], contractProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * 1000, &processors[computingProcessorNumber], NULL);
                 }
                 /*if (!computationProcessorState && (computation || __computation))
@@ -7018,7 +7025,8 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                         // prepare and send ExchangePublicPeers message
                         ExchangePublicPeers* request = (ExchangePublicPeers*)&peers[i].dataToTransmit[sizeof(RequestResponseHeader)];
                         bool noVerifiedPublicPeers = true;
-                        for (unsigned int k = 0; k < numberOfPublicPeers; k++)
+                        // Only check non-private peers for handshake status
+                        for (unsigned int k = NUMBER_OF_PRIVATE_IP; k < numberOfPublicPeers; k++)
                         {
                             if (publicPeers[k].isHandshaked /*&& publicPeers[k].isFullnode*/)
                             {
@@ -7036,15 +7044,24 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             }
                             else
                             {
-                                // randomly select verified public peers
-                                const unsigned int publicPeerIndex = random(numberOfPublicPeers);
-                                if (publicPeers[publicPeerIndex].isHandshaked /*&& publicPeers[publicPeerIndex].isFullnode*/)
+                                if (NUMBER_OF_PRIVATE_IP < numberOfPublicPeers)
                                 {
-                                    request->peers[j] = publicPeers[publicPeerIndex].address;
+                                    // randomly select verified public peers and discard private IPs
+                                    // first NUMBER_OF_PRIVATE_IP ips are same on both array publicPeers and knownPublicPeers
+                                    const unsigned int publicPeerIndex = NUMBER_OF_PRIVATE_IP + random(numberOfPublicPeers - NUMBER_OF_PRIVATE_IP);
+                                    // share the peer if it's not our private IPs and is handshaked
+                                    if (publicPeers[publicPeerIndex].isHandshaked)
+                                    {
+                                        request->peers[j] = publicPeers[publicPeerIndex].address;
+                                    }
+                                    else
+                                    {
+                                        j--;
+                                    }
                                 }
                                 else
                                 {
-                                    j--;
+                                    request->peers[j].u32 = 0;
                                 }
                             }
                         }

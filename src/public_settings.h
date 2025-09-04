@@ -32,7 +32,7 @@
 #define TARGET_TICK_DURATION 7000
 #define TRANSACTION_SPARSENESS 4
 #else
-#define TARGET_TICK_DURATION 1000
+#define TARGET_TICK_DURATION 3000
 #define TRANSACTION_SPARSENESS 1
 #endif
 
@@ -70,26 +70,26 @@ static_assert(AUTO_FORCE_NEXT_TICK_THRESHOLD* TARGET_TICK_DURATION >= PEER_REFRE
 // Config options that should NOT be changed by operators
 
 #define VERSION_A 1
-#define VERSION_B 256
-#define VERSION_C 0
+#define VERSION_B 257
+#define VERSION_C 1
 
 // Epoch and initial tick for node startup
-#define EPOCH 175
-#define TICK 31500000
+#define EPOCH 176
+#define TICK 31910000
 #define TICK_IS_FIRST_TICK_OF_EPOCH 1 // Set to 0 if the network is restarted during the EPOCH with a new initial TICK
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 #define DISPATCHER "XPXYKFLGSWRHRGAUKWFWVXCDVEYAPCPCNUTMUDWFGDYQCWZNJMWFZEEGCFFO"
 
-static unsigned short SYSTEM_FILE_NAME[] = L"system";
-static unsigned short SYSTEM_END_OF_EPOCH_FILE_NAME[] = L"system.eoe";
-static unsigned short SPECTRUM_FILE_NAME[] = L"spectrum.???";
-static unsigned short UNIVERSE_FILE_NAME[] = L"universe.???";
-static unsigned short SCORE_CACHE_FILE_NAME[] = L"score.???";
-static unsigned short CONTRACT_FILE_NAME[] = L"contract????.???";
-static unsigned short CUSTOM_MINING_REVENUE_END_OF_EPOCH_FILE_NAME[] = L"custom_revenue.eoe";
-static unsigned short CUSTOM_MINING_CACHE_FILE_NAME[] = L"custom_mining_cache???.???";
-static unsigned short CUSTOM_MINING_V2_CACHE_FILE_NAME[] = L"custom_mining_v2_cache.???";
+static wchar_t SYSTEM_FILE_NAME[] = L"system";
+static wchar_t SYSTEM_END_OF_EPOCH_FILE_NAME[] = L"system.eoe";
+static wchar_t SPECTRUM_FILE_NAME[] = L"spectrum.???";
+static wchar_t UNIVERSE_FILE_NAME[] = L"universe.???";
+static wchar_t SCORE_CACHE_FILE_NAME[] = L"score.???";
+static wchar_t CONTRACT_FILE_NAME[] = L"contract????.???";
+static wchar_t CUSTOM_MINING_REVENUE_END_OF_EPOCH_FILE_NAME[] = L"custom_revenue.eoe";
+static wchar_t CUSTOM_MINING_CACHE_FILE_NAME[] = L"custom_mining_cache???.???";
+static wchar_t CUSTOM_MINING_V2_CACHE_FILE_NAME[] = L"custom_mining_v2_cache.???";
 
 static constexpr unsigned long long NUMBER_OF_INPUT_NEURONS = 512;     // K
 static constexpr unsigned long long NUMBER_OF_OUTPUT_NEURONS = 512;    // L
