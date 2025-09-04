@@ -3243,15 +3243,6 @@ static void processTick(unsigned long long processorNumber)
     getUniverseDigest(etalonTick.saltedUniverseDigest);
     getComputerDigest(etalonTick.saltedComputerDigest);
 
-    setText(message, L"Spectrum digest at tick ");
-	appendNumber(message, system.tick, TRUE);
-    appendText(message, L": ");
-    CHAR16 digestChars[60 + 1];
-    getIdentity(etalonTick.saltedSpectrumDigest.m256i_u8, digestChars, true);
-	appendText(message, digestChars);
-	logToConsole(message);
-
-
     // prepare custom mining shares packet ONCE
     if (isMainMode())
     {
