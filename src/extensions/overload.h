@@ -534,7 +534,7 @@ struct Overload {
             int sentBytes = send(tcpData->socket, (const char*)fragment.FragmentBuffer + totalSentBytes, fragment.FragmentLength - totalSentBytes, MSG_NOSIGNAL);
             if (sentBytes == 0) {
                 // connection closed
-                Token->CompletionToken.Status = EFI_ABORTED;
+                Token->CompletionToken.Status = -1;
                 return EFI_ABORTED;
             } else if (sentBytes == SOCKET_ERROR)
             {
@@ -565,7 +565,7 @@ struct Overload {
                     continue; // retry send
 				}
 				else {
-					Token->CompletionToken.Status = EFI_ABORTED;
+					Token->CompletionToken.Status = -1;
 					return EFI_ABORTED;
 				}
 #else
@@ -583,7 +583,7 @@ struct Overload {
                     continue; // retry
                 } else
                 {
-                    Token->CompletionToken.Status = EFI_ABORTED;
+                    Token->CompletionToken.Status = -1;
                     return EFI_ABORTED;
                 }
 #endif
@@ -645,7 +645,7 @@ struct Overload {
                     break;
                 } else {
                     // real error
-                    Token->CompletionToken.Status = EFI_ABORTED;
+                    Token->CompletionToken.Status = -1;
                     return EFI_ABORTED;
                 }
 #else
@@ -656,15 +656,15 @@ struct Overload {
                     break;
                 } else
                 {
-                    Token->CompletionToken.Status = EFI_ABORTED;
+                    Token->CompletionToken.Status = -1;
                     return EFI_ABORTED;
                 }
 #endif
             } else if (bytes == 0)
             {
                 // connection closed, mark status as error to reconnect in main thread
-                Token->CompletionToken.Status = EFI_ABORTED;
-                return EFI_ABORTED;
+                Token->CompletionToken.Status = -1;
+                return EFI_CONNECTION_FIN;
             }
         }
 

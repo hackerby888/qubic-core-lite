@@ -123,9 +123,6 @@ struct Peer
         dataToTransmitSize = 0;
         lastActiveTick = 0;
         trackRequestedCounter = 0;
-		receiveToken.CompletionToken.Status = -1;
-		transmitToken.CompletionToken.Status = -1;
-		connectAcceptToken.CompletionToken.Status = -1;
         setMem(trackRequestedTick, sizeof(trackRequestedTick), 0);
         setMem(trackRequestedDejavu, sizeof(trackRequestedDejavu), 0);
     }
