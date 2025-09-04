@@ -541,27 +541,28 @@ struct Overload {
 #ifdef _MSC_VER
                 int err = WSAGetLastError();
                 if (err == WSAEWOULDBLOCK) {
+                    logToConsole(L"Need to wait to send bytes");
                     // wait until socket is writable
-                    //fd_set wfds;
-                    //FD_ZERO(&wfds);
-                    //FD_SET(tcpData->socket, &wfds);
+                    fd_set wfds;
+                    FD_ZERO(&wfds);
+                    FD_SET(tcpData->socket, &wfds);
 
-                    //int timeout_ms = -1; // no timeout
+                    int timeout_ms = 500; // no timeout
 
-                    //TIMEVAL tv;
-                    //TIMEVAL* ptv = nullptr;
-                    //if (timeout_ms >= 0) {
-                    //    tv.tv_sec = timeout_ms / 1000;
-                    //    tv.tv_usec = (timeout_ms % 1000) * 1000;
-                    //    ptv = &tv;
-                    //}
+                    TIMEVAL tv;
+                    TIMEVAL* ptv = nullptr;
+                    if (timeout_ms >= 0) {
+                        tv.tv_sec = timeout_ms / 1000;
+                        tv.tv_usec = (timeout_ms % 1000) * 1000;
+                        ptv = &tv;
+                    }
 
-                    //int ret = select(0, nullptr, &wfds, nullptr, ptv);
-                    //if (ret <= 0) {
-                    //    // timeout or error
-                    //    Token->CompletionToken.Status = EFI_ABORTED;
-                    //    return EFI_ABORTED;
-                    //}
+                    int ret = select(0, nullptr, &wfds, nullptr, ptv);
+                    if (ret <= 0) {
+                        // timeout or error
+                        Token->CompletionToken.Status = -1;
+                        return EFI_ABORTED;
+                    }
                     continue; // retry send
 				}
 				else {
@@ -571,15 +572,15 @@ struct Overload {
 #else
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
-                    //pollfd pfd;
-                    //pfd.fd = tcpData->socket;
-                    //pfd.events = POLLOUT;
-                    //int ret = poll(&pfd, 1, -1);
-                    //if (ret <= 0) {
-                    //    // timeout or error
-                    //    Token->CompletionToken.Status = EFI_ABORTED;
-                    //    return EFI_ABORTED;
-                    //}
+                    pollfd pfd;
+                    pfd.fd = tcpData->socket;
+                    pfd.events = POLLOUT;
+                    int ret = poll(&pfd, 1, 500);
+                    if (ret <= 0) {
+                        // timeout or error
+                        Token->CompletionToken.Status = -1;
+                        return EFI_ABORTED;
+                    }
                     continue; // retry
                 } else
                 {
