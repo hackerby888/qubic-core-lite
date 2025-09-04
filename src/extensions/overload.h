@@ -530,6 +530,7 @@ struct Overload {
         while (totalSentBytes < fragment.FragmentLength) {
 #ifdef _MSC_VER
 #define MSG_NOSIGNAL 0
+#define MSG_DONTWAIT 0
 #endif
             int sentBytes = send(tcpData->socket, (const char*)fragment.FragmentBuffer + totalSentBytes, fragment.FragmentLength - totalSentBytes, MSG_NOSIGNAL | MSG_DONTWAIT);
             if (sentBytes == 0) {
@@ -619,11 +620,6 @@ struct Overload {
         memset(buffer, 0, sizeof(buffer));
         Token->Packet.RxData->DataLength = 0;
 
-#ifdef _MSC_VER
-        u_long mode = 1;
-        ioctlsocket(tcpData->socket, FIONBIO, &mode);
-#endif
-
         while (true)
         {
 #ifdef _MSC_VER
@@ -668,10 +664,6 @@ struct Overload {
             }
         }
 
-#ifdef _MSC_VER
-        mode = 0;
-        ioctlsocket(tcpData->socket, FIONBIO, &mode);
-#endif
         Token->CompletionToken.Status = EFI_SUCCESS;
         return EFI_SUCCESS;
     }
@@ -804,6 +796,11 @@ struct Overload {
                 return;
             }
 
+#ifdef _MSC_VER
+            u_long mode = 1;
+            ioctlsocket(clientSocket, FIONBIO, &mode);
+#endif
+
             CreateChild(NULL, &ListenToken->NewChildHandle);
             // At this point we dont know the tcp4Protocol for this peer (tcp4Protocol will be inititialzed in peerConnectionNewlyEstablished())
             // so we map the clientSocket to the handle to process it later in peerConnectionNewlyEstablished()
@@ -841,6 +838,11 @@ struct Overload {
         #else
         serverAddr.sin_addr.s_addr = *((unsigned long*)tcpData->configData.AccessPoint.RemoteAddress.Addr);
         #endif
+
+#ifdef _MSC_VER
+        u_long mode = 1;
+        ioctlsocket(tcpData->socket, FIONBIO, &mode);
+#endif
 
         // connect in a thread
         std::thread connectThread([tcpData, serverAddr, ConnectionToken]() {
