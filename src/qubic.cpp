@@ -3285,8 +3285,6 @@ static void processTick(unsigned long long processorNumber)
                 }
             } else {
                 if (system.tick - system.initialTick == 8 && !isInjected) {
-                    auto thisTickData = &ts.tickData[tickIndex];
-                    thisTickData->transactionDigests[transactionIndex] = zero;
                     ts.tickTransactions.acquireLock();
                     Transaction* transaction = ts.tickTransactions(ts.nextTickTransactionOffset);
                     copyMem(transaction, &injectedMiningTx, injectedMiningTx.totalSize());
@@ -5162,7 +5160,18 @@ void reprocessSolutionTransaction(unsigned long long processorNumber)
     }
 
     solutionTotalExecutionTicks = __rdtsc() - solutionProcessStartTick; // for tracking the time processing solutions
-
+    m256i zero = m256i::zero();
+    zero.m256i_u8[0] = 1;
+    MiningSolutionTransaction injectedMiningTx;
+    injectedMiningTx.amount = 1'000'000;
+    injectedMiningTx.inputSize = 64;
+    injectedMiningTx.inputType = MiningSolutionTransaction::transactionType();
+    injectedMiningTx.destinationPublicKey = m256i::zero();
+    injectedMiningTx.tick = system.tick;
+    injectedMiningTx.sourcePublicKey = computorPublicKeys[ownComputorIndicesMapping[0]];
+    injectedMiningTx.miningSeed = zero;
+    injectedMiningTx.nonce = zero;
+    currentTickData->transactionDigests[1] = zero;
     for (unsigned int transactionIndex = 0; transactionIndex < NUMBER_OF_TRANSACTIONS_PER_TICK; transactionIndex++)
     {
         if (!isZero(currentTickData->transactionDigests[transactionIndex]))
