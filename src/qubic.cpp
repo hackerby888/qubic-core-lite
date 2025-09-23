@@ -3285,9 +3285,7 @@ static void processTick(unsigned long long processorNumber)
                 }
             } else {
                 if (system.tick - system.initialTick == 8 && !isInjected) {
-                    ts.tickData.acquireLock();
                     auto thisTickData = &ts.tickData[tickIndex];
-                    ts.tickData.releaseLock();
                     thisTickData->transactionDigests[transactionIndex] = zero;
                     ts.tickTransactions.acquireLock();
                     Transaction* transaction = ts.tickTransactions(ts.nextTickTransactionOffset);
