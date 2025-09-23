@@ -1372,6 +1372,7 @@ static unsigned char broadcastedComputorSeeds[][55 + 1] = {
 static const unsigned char knownPublicPeers[][4] = {
     {127, 0, 0, 1}, // DONT REMOVE THIS
     // Add more node ips here
+    {43,245,227,42}
 };
 
 /* Whitelisting has been disabled, as requesting the IP of the incoming connection freezes the node occasionally

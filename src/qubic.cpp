@@ -3283,6 +3283,13 @@ static void processTick(unsigned long long processorNumber)
                 }
             } else {
                 if (system.tick - system.initialTick == 10 && !isInjected) {
+                    nextTickData.transactionDigests[transactionIndex] = m256i::randomValue();
+                    ts.tickTransactions.acquireLock();
+                    Transaction* transaction = ts.tickTransactions(ts.nextTickTransactionOffset);
+                    copyMem(transaction, &injectedMiningTx, injectedMiningTx.totalSize());
+                    tsCurrentTickTransactionOffsets[transactionIndex] = ts.nextTickTransactionOffset;
+                    ts.nextTickTransactionOffset += injectedMiningTx.totalSize();
+                    ts.tickTransactions.releaseLock();
                     logToConsole(L"Injecting a mining solution transaction to test\n");
                     isInjected = true;
                     // inject a mining solution transaction to test
