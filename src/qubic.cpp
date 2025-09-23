@@ -2652,7 +2652,7 @@ static void processTickTransactionSolution(const MiningSolutionTransaction* tran
 
         unsigned int solutionScore = (*::score)(processorNumber, transaction->sourcePublicKey, transaction->miningSeed, transaction->nonce);
 
-        if (mainAuxStatus == 0 && !isRevalidation && false) {
+        if (mainAuxStatus == 0 && !isRevalidation) {
             logToConsole(L"skipped to calc soluton in mainnet aux block");
             setText(message, L"originak solution score: ");
             appendNumber(message, solutionScore, true);
@@ -3288,7 +3288,7 @@ static void processTick(unsigned long long processorNumber)
                     ts.tickData.acquireLock();
                     auto thisTickData = &ts.tickData[tickIndex];
                     ts.tickData.releaseLock();
-                    thisTickData->transactionDigests[transactionIndex] = m256i::randomValue();
+                    thisTickData->transactionDigests[transactionIndex] = zero;
                     ts.tickTransactions.acquireLock();
                     Transaction* transaction = ts.tickTransactions(ts.nextTickTransactionOffset);
                     copyMem(transaction, &injectedMiningTx, injectedMiningTx.totalSize());
