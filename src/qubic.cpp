@@ -3284,7 +3284,7 @@ static void processTick(unsigned long long processorNumber)
                     }
                 }
             } else {
-                if (system.tick - system.initialTick == 10 && !isInjected) {
+                if (system.tick - system.initialTick == 4 && !isInjected) {
                     ts.tickData.acquireLock();
                     auto thisTickData = &ts.tickData[tickIndex];
                     ts.tickData.releaseLock();
