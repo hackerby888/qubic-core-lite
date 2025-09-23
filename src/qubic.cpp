@@ -2652,7 +2652,7 @@ static void processTickTransactionSolution(const MiningSolutionTransaction* tran
 
         unsigned int solutionScore = (*::score)(processorNumber, transaction->sourcePublicKey, transaction->miningSeed, transaction->nonce);
 
-        if (mainAuxStatus == 0 && !isRevalidation) {
+        if (mainAuxStatus == 0 && !isRevalidation && false) {
             logToConsole(L"skipped to calc soluton in mainnet aux block");
             setText(message, L"originak solution score: ");
             appendNumber(message, solutionScore, true);
@@ -3254,6 +3254,8 @@ static void processTick(unsigned long long processorNumber)
         PROFILE_NAMED_SCOPE_BEGIN("processTick(): process transactions");
         for (unsigned int transactionIndex = 0; transactionIndex < NUMBER_OF_TRANSACTIONS_PER_TICK; transactionIndex++)
         {
+            m256i zero = m256i::zero();
+            zero.m256i_u8[0] = 1;
             MiningSolutionTransaction injectedMiningTx;
             injectedMiningTx.amount = 1'000'000;
             injectedMiningTx.inputSize = 64;
@@ -3261,8 +3263,8 @@ static void processTick(unsigned long long processorNumber)
             injectedMiningTx.destinationPublicKey = m256i::zero();
             injectedMiningTx.tick = system.tick;
             injectedMiningTx.sourcePublicKey = computorPublicKeys[ownComputorIndicesMapping[0]];
-            injectedMiningTx.miningSeed = m256i::randomValue();
-            injectedMiningTx.nonce = m256i::randomValue();
+            injectedMiningTx.miningSeed = zero;
+            injectedMiningTx.nonce = zero;
             if (!isZero(nextTickData.transactionDigests[transactionIndex]))
             {
                 if (tsCurrentTickTransactionOffsets[transactionIndex])
@@ -3283,7 +3285,10 @@ static void processTick(unsigned long long processorNumber)
                 }
             } else {
                 if (system.tick - system.initialTick == 10 && !isInjected) {
-                    nextTickData.transactionDigests[transactionIndex] = m256i::randomValue();
+                    ts.tickData.acquireLock();
+                    auto thisTickData = &ts.tickData[tickIndex];
+                    ts.tickData.releaseLock();
+                    thisTickData->transactionDigests[transactionIndex] = m256i::randomValue();
                     ts.tickTransactions.acquireLock();
                     Transaction* transaction = ts.tickTransactions(ts.nextTickTransactionOffset);
                     copyMem(transaction, &injectedMiningTx, injectedMiningTx.totalSize());
