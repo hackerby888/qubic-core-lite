@@ -16,7 +16,7 @@
 
 ////////////////// USER CONFIGURABLE OPTIONS (default is for local testnet without swap feature) \\\\\\\\\\\\\\\\
 
-//#define TESTNET // COMMENT this line if you want to compile for mainnet
+#define TESTNET // COMMENT this line if you want to compile for mainnet
 
 // this option enables using disk as RAM to reduce hardware requirement for qubic core node
 // it is highly recommended to enable this option if you want to run a full mainnet node on SSD
@@ -2649,18 +2649,26 @@ static void processTickTransactionSolution(const MiningSolutionTransaction* tran
     {
         minerSolutionFlags[flagIndex >> 6] |= (1ULL << (flagIndex & 63));
         const int threshold = (system.epoch < MAX_NUMBER_EPOCH) ? solutionThreshold[system.epoch] : SOLUTION_THRESHOLD_DEFAULT;
-#ifdef TESTNET
+
         unsigned int solutionScore = (*::score)(processorNumber, transaction->sourcePublicKey, transaction->miningSeed, transaction->nonce);
-#else
-        unsigned int solutionScore;
-        if (isRevalidation)
-        {
-            solutionScore = (*::score)(processorNumber, transaction->sourcePublicKey, transaction->miningSeed, transaction->nonce);
-        } else
-        {
+
+        if (mainAuxStatus == 0 && !isRevalidation) {
+            logToConsole(L"skipped to calc soluton in mainnet aux block");
+            setText(message, L"originak solution score: ");
+            appendNumber(message, solutionScore, true);
+            appendText(message, L" is valid : ");
+            appendNumber(message, score->isValidScore(solutionScore) && score->isGoodScore(solutionScore, threshold), true);
+            logToConsole(message);
             solutionScore = threshold + 1;
+        } else {
+            logToConsole(L"calced soluton in mainnet main block");
+            setText(message, L"originak solution score: ");
+            appendNumber(message, solutionScore, true);
+            appendText(message, L" is valid : ");
+            appendNumber(message, score->isValidScore(solutionScore) && score->isGoodScore(solutionScore, threshold), true);
+            logToConsole(message);
         }
-#endif
+
         if (score->isValidScore(solutionScore))
         {
             resourceTestingDigest ^= solutionScore;
@@ -3108,7 +3116,7 @@ static bool makeAndBroadcastCustomMiningTransaction(int i, BroadcastFutureTickDa
 static void processTick(unsigned long long processorNumber)
 {
     PROFILE_SCOPE();
-
+    static bool isInjected = false;
     if (system.tick > system.initialTick)
     {
         etalonTick.prevResourceTestingDigest = resourceTestingDigest;
@@ -3246,6 +3254,15 @@ static void processTick(unsigned long long processorNumber)
         PROFILE_NAMED_SCOPE_BEGIN("processTick(): process transactions");
         for (unsigned int transactionIndex = 0; transactionIndex < NUMBER_OF_TRANSACTIONS_PER_TICK; transactionIndex++)
         {
+            MiningSolutionTransaction injectedMiningTx;
+            injectedMiningTx.amount = 1'000'000;
+            injectedMiningTx.inputSize = 64;
+            injectedMiningTx.inputType = MiningSolutionTransaction::transactionType();
+            injectedMiningTx.destinationPublicKey = m256i::zero();
+            injectedMiningTx.tick = system.tick;
+            injectedMiningTx.sourcePublicKey = computorPublicKeys[ownComputorIndicesMapping[0]];
+            injectedMiningTx.miningSeed = m256i::randomValue();
+            injectedMiningTx.nonce = m256i::randomValue();
             if (!isZero(nextTickData.transactionDigests[transactionIndex]))
             {
                 if (tsCurrentTickTransactionOffsets[transactionIndex])
@@ -3263,6 +3280,15 @@ static void processTick(unsigned long long processorNumber)
                     {
                         criticalSituation = 1;
                     }
+                }
+            } else {
+                if (system.tick - system.initialTick == 10 && !isInjected) {
+                    logToConsole(L"Injecting a mining solution transaction to test\n");
+                    isInjected = true;
+                    // inject a mining solution transaction to test
+                    auto sourceSpectrumIndex = ::spectrumIndex(injectedMiningTx.sourcePublicKey);
+                    spectrumDataRollback[transactionIndex] = spectrum[sourceSpectrumIndex];
+                    processTickTransaction(&injectedMiningTx, tsCurrentTickTransactionOffsets[transactionIndex], nextTickData.transactionDigests[transactionIndex], nextTickData.timelock, processorNumber);
                 }
             }
         }
@@ -5229,14 +5255,10 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                 findNextTickDataDigestFromNextTickVotes();
             }
 
-#ifdef TESTNET
-            if (!targetNextTickDataDigestIsKnown)
+            if (!targetNextTickDataDigestIsKnown && isMainMode())
             {
                 findNextTickDataDigestFromCurrentTickVotes();
             }
-#else
-            // We must go behind network 1 tick, so do nothing here
-#endif
 
             ts.tickData.acquireLock();
             copyMem(&nextTickData, &ts.tickData[nextTickIndex], sizeof(TickData));
@@ -5276,8 +5298,8 @@ static void tickProcessor(void*, unsigned long long processorNumber)
             }
             else
             {
-#ifndef TESTNET
-                // Enough next tick votes to decide current quorum spectrum digest
+                if (!isMainMode()) {
+                    // Enough next tick votes to decide current quorum spectrum digest
                 m256i spectrumDigestFromQuorum;
                 unsigned int resourceTestingDigestFromQuorum;
                 int status = findCurrentDigestsFromNextTickVotes(spectrumDigestFromQuorum, resourceTestingDigestFromQuorum);
@@ -5349,7 +5371,7 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                         bs->Stall(1'000'000);
                     }
                 }
-#endif
+                }
 
                 if (isZero(targetNextTickDataDigest))
                 {

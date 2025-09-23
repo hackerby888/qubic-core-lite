@@ -1371,9 +1371,6 @@ static unsigned char broadcastedComputorSeeds[][55 + 1] = {
 // You can find current peer IPs at https://app.qubic.li/network/live
 static const unsigned char knownPublicPeers[][4] = {
     {127, 0, 0, 1}, // DONT REMOVE THIS
-    {104,248,142,95},
-    {64,226,122,206},
-    {134,122,69,166},
     // Add more node ips here
 };
 
@@ -1420,7 +1417,7 @@ static unsigned long long logReaderPasscodes[4] = {
 // 0: disable
 // 1: save tick storage every TICK_STORAGE_AUTOSAVE_TICK_PERIOD ticks, only AUX mode
 // 2: save tick storage only when pressing the `F8` key or it is requested remotely
-#define TICK_STORAGE_AUTOSAVE_MODE 0 
+#define TICK_STORAGE_AUTOSAVE_MODE 0
 // NOTE: Strategy to pick TICK_STORAGE_AUTOSAVE_TICK_PERIOD:
 // Although the default value is 1000, there is a chance that your node can be misaligned at tick XXXX2000,XXXX3000,XXXX4000,... 
 // Perform state persisting when your node is misaligned will also make your node misaligned after resuming.
