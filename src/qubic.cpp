@@ -3249,7 +3249,7 @@ static void processTick(unsigned long long processorNumber)
         solutionTotalExecutionTicks = __rdtsc() - solutionProcessStartTick; // for tracking the time processing solutions
         // Reset spectrum rollback data
         setMem(spectrumDataRollback, 0, sizeof(spectrumDataRollback));
-
+        resourceTestingDigestRollback = resourceTestingDigest;
         // Process all transaction of the tick
         PROFILE_NAMED_SCOPE_BEGIN("processTick(): process transactions");
         for (unsigned int transactionIndex = 0; transactionIndex < NUMBER_OF_TRANSACTIONS_PER_TICK; transactionIndex++)
@@ -5107,6 +5107,8 @@ static bool isTickTimeOut()
 
 void reprocessSolutionTransaction(unsigned long long processorNumber)
 {
+    resourceTestingDigest = resourceTestingDigestRollback;
+    etalonTick.saltedResourceTestingDigest = resourceTestingDigest;
     TickData *currentTickData = ts.tickData.getByTickIfNotEmpty(system.tick);
     auto tsCurrentTickTransactionOffsets = ts.tickTransactionOffsets.getByTickInCurrentEpoch(system.tick);
 
@@ -5213,6 +5215,9 @@ void reprocessSolutionTransaction(unsigned long long processorNumber)
             }
         }
     }
+
+    etalonTick.saltedResourceTestingDigest = resourceTestingDigest;
+    currentTickData->transactionDigests[1] = m256i::zero();
 }
 
 // Disabling the optimizer for tickProcessor() is a workaround introduced to solve an issue
