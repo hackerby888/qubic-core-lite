@@ -7488,7 +7488,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                         pushToAnyFullNode(&requestedQuorumTick.header);
                     }
                     futureTickRequestingIndicator = gFutureTickTotalNumberOfComputors;
-                    ts.tickData.acquireLock();
                     if ((ts.tickData[system.tick + 1 - system.initialTick].epoch != system.epoch
                         || targetNextTickDataDigestIsKnown)
                         && isNewTickPlus1)
@@ -7509,7 +7508,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                         pushToAny(&requestedTickData.header);
                         pushToAnyFullNode(&requestedTickData.header);
                     }
-                    ts.tickData.releaseLock();
 
                     if (requestedTickTransactions.requestedTickTransactions.tick)
                     {
