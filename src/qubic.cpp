@@ -3211,9 +3211,57 @@ static void processTick(unsigned long long processorNumber)
 
     getUniverseDigest(etalonTick.saltedUniverseDigest);
 
-    if (isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch())
-    {
-        getComputerDigest(etalonTick.saltedComputerDigest);
+    if (isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch()) {
+        unsigned int digestIndex;
+        for (digestIndex = 0; digestIndex < MAX_NUMBER_OF_CONTRACTS; digestIndex++) {
+            if (true || contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63))) {
+                const unsigned long long size = digestIndex < contractCount ? contractDescriptions[digestIndex].stateSize : 0;
+                if (!size) {
+                    contractStateDigests[digestIndex] = m256i::zero();
+                } else {
+                    // FIXME: We may have a race condition here if a digest is computed here by thread A, the state is changed
+                    // + contractStateChangeFlags set afterwards by thread B and contractStateChangeFlags cleared below below
+                    // by thread A. We then have a changed state but a cleared contractStateChangeFlags flag leading to wrong
+                    // digest.
+                    // This is currently avoided by calling getComputerDigest() from tick processor only (and in non-concurrent init)
+                    contractStateLock[digestIndex].acquireRead();
+
+                    const unsigned long long startTick = __rdtsc();
+                    KangarooTwelve(contractStates[digestIndex], (unsigned int) size, &contractStateDigests[digestIndex], 32);
+                    const unsigned long long executionTicks = __rdtsc() - startTick;
+
+                    contractStateLock[digestIndex].releaseRead();
+
+                    // K12 of state is included in contract execution time
+                    _interlockedadd64(&contractTotalExecutionTicks[digestIndex], executionTicks);
+
+                    // Gather data for comparing different versions of K12
+                    if (K12MeasurementsCount < 500) {
+                        K12MeasurementsSum += executionTicks;
+                        K12MeasurementsCount++;
+                    }
+                }
+            }
+        }
+        unsigned int previousLevelBeginning = 0;
+        unsigned int numberOfLeafs = MAX_NUMBER_OF_CONTRACTS;
+        while (numberOfLeafs > 1) {
+            for (unsigned int i = 0; i < numberOfLeafs; i += 2) {
+                if (true || contractStateChangeFlags[i >> 6] & (3ULL << (i & 63))) {
+                    KangarooTwelve64To32(&contractStateDigests[previousLevelBeginning + i], &contractStateDigests[digestIndex]);
+                    contractStateChangeFlags[i >> 6] &= ~(3ULL << (i & 63));
+                    contractStateChangeFlags[i >> 7] |= (1ULL << ((i >> 1) & 63));
+                }
+                digestIndex++;
+            }
+            previousLevelBeginning += numberOfLeafs;
+            numberOfLeafs >>= 1;
+        }
+        contractStateChangeFlags[0] = 0;
+
+        etalonTick.saltedComputerDigest = contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
+        setMem(contractStateDigests, sizeof(contractStateDigests), 0);
+    } else {
     }
 
     // prepare custom mining shares packet ONCE
