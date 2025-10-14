@@ -3260,7 +3260,6 @@ static void processTick(unsigned long long processorNumber)
         contractStateChangeFlags[0] = 0;
 
         etalonTick.saltedComputerDigest = contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
-        setMem(contractStateDigests, sizeof(contractStateDigests), 0);
     } else {
     }
 
