@@ -456,10 +456,11 @@ static void getComputerDigest(m256i& digest)
 {
     PROFILE_SCOPE();
 
+    setMem(contractStateDigests, sizeof(contractStateDigests), 0);
     unsigned int digestIndex;
     for (digestIndex = 0; digestIndex < MAX_NUMBER_OF_CONTRACTS; digestIndex++)
     {
-        if (contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63)))
+        if (true || contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63)))
         {
             const unsigned long long size = digestIndex < contractCount ? contractDescriptions[digestIndex].stateSize : 0;
             if (!size)
@@ -499,7 +500,7 @@ static void getComputerDigest(m256i& digest)
     {
         for (unsigned int i = 0; i < numberOfLeafs; i += 2)
         {
-            if (contractStateChangeFlags[i >> 6] & (3ULL << (i & 63)))
+            if (true || contractStateChangeFlags[i >> 6] & (3ULL << (i & 63)))
             {
                 KangarooTwelve64To32(&contractStateDigests[previousLevelBeginning + i], &contractStateDigests[digestIndex]);
                 contractStateChangeFlags[i >> 6] &= ~(3ULL << (i & 63));
@@ -513,6 +514,7 @@ static void getComputerDigest(m256i& digest)
     contractStateChangeFlags[0] = 0;
 
     digest = contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
+    setMem(contractStateDigests, sizeof(contractStateDigests), 0);
 }
 
 static void getSpectrumDigest(m256i& digest)
