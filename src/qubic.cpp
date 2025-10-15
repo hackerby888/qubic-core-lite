@@ -3076,6 +3076,7 @@ static void processTick(unsigned long long processorNumber)
     WAIT_WHILE(contractProcessorState);
     PROFILE_SCOPE_END();
 
+    bool isThereQeanTx = false;
     unsigned int tickIndex = ts.tickToIndexCurrentEpoch(system.tick);
     ts.tickData.acquireLock();
     copyMem(&nextTickData, &ts.tickData[tickIndex], sizeof(TickData));
@@ -3151,6 +3152,11 @@ static void processTick(unsigned long long processorNumber)
                 {
                     Transaction* transaction = ts.tickTransactions(tsCurrentTickTransactionOffsets[transactionIndex]);
                     logger.registerNewTx(transaction->tick, transactionIndex);
+                    if (transaction->destinationPublicKey == m256i(QEARN_CONTRACT_INDEX, 0, 0, 0))
+                    {
+                        isThereQeanTx = true;
+                    }
+
                     // Store spectrum data for rollback if there is invalid solutions in the tick
                     auto sourceSpectrumIndex = ::spectrumIndex(transaction->sourcePublicKey);
                     spectrumDataRollback[transactionIndex] = spectrum[sourceSpectrumIndex];
@@ -3221,7 +3227,7 @@ static void processTick(unsigned long long processorNumber)
     KangarooTwelve(contractStates[QEARN_CONTRACT_INDEX], (unsigned int)size, &qearnDigest, 32);
     contractStateLock[QEARN_CONTRACT_INDEX].releaseRead();
 
-    if (isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch()) {
+    if (isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch() || isThereQeanTx) {
         getComputerDigest(etalonTick.saltedComputerDigest);
     }
 
