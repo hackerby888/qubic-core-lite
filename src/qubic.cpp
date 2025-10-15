@@ -451,16 +451,16 @@ static void enableAVX()
 {
 }
 
+m256i qearnDigest = m256i::zero();
 // Should only be called from tick processor to avoid concurrent state changes, which can cause race conditions as detailed in FIXME below.
 static void getComputerDigest(m256i& digest)
 {
     PROFILE_SCOPE();
 
-    setMem(contractStateDigests, sizeof(contractStateDigests), 0);
     unsigned int digestIndex;
     for (digestIndex = 0; digestIndex < MAX_NUMBER_OF_CONTRACTS; digestIndex++)
     {
-        if (true || contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63)))
+        if (contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63)))
         {
             const unsigned long long size = digestIndex < contractCount ? contractDescriptions[digestIndex].stateSize : 0;
             if (!size)
@@ -477,7 +477,13 @@ static void getComputerDigest(m256i& digest)
                 contractStateLock[digestIndex].acquireRead();
 
                 const unsigned long long startTick = __rdtsc();
-                KangarooTwelve(contractStates[digestIndex], (unsigned int)size, &contractStateDigests[digestIndex], 32);
+                if (digestIndex == QEARN_CONTRACT_INDEX)
+                {
+                    copyMem(&contractStateDigests[digestIndex], &qearnDigest, sizeof(m256i));
+                } else
+                {
+                    KangarooTwelve(contractStates[digestIndex], (unsigned int)size, &contractStateDigests[digestIndex], 32);
+                }
                 const unsigned long long executionTicks = __rdtsc() - startTick;
 
                 contractStateLock[digestIndex].releaseRead();
@@ -500,7 +506,7 @@ static void getComputerDigest(m256i& digest)
     {
         for (unsigned int i = 0; i < numberOfLeafs; i += 2)
         {
-            if (true || contractStateChangeFlags[i >> 6] & (3ULL << (i & 63)))
+            if (contractStateChangeFlags[i >> 6] & (3ULL << (i & 63)))
             {
                 KangarooTwelve64To32(&contractStateDigests[previousLevelBeginning + i], &contractStateDigests[digestIndex]);
                 contractStateChangeFlags[i >> 6] &= ~(3ULL << (i & 63));
@@ -514,7 +520,6 @@ static void getComputerDigest(m256i& digest)
     contractStateChangeFlags[0] = 0;
 
     digest = contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
-    setMem(contractStateDigests, sizeof(contractStateDigests), 0);
 }
 
 static void getSpectrumDigest(m256i& digest)
@@ -3211,56 +3216,13 @@ static void processTick(unsigned long long processorNumber)
 
     getUniverseDigest(etalonTick.saltedUniverseDigest);
 
+    unsigned int size = contractDescriptions[QEARN_CONTRACT_INDEX].stateSize;
+    contractStateLock[QEARN_CONTRACT_INDEX].acquireRead();
+    KangarooTwelve(contractStates[QEARN_CONTRACT_INDEX], (unsigned int)size, &qearnDigest, 32);
+    contractStateLock[QEARN_CONTRACT_INDEX].releaseRead();
+
     if (isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch()) {
-        unsigned int digestIndex;
-        for (digestIndex = 0; digestIndex < MAX_NUMBER_OF_CONTRACTS; digestIndex++) {
-            if (true || contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63))) {
-                const unsigned long long size = digestIndex < contractCount ? contractDescriptions[digestIndex].stateSize : 0;
-                if (!size) {
-                    contractStateDigests[digestIndex] = m256i::zero();
-                } else {
-                    // FIXME: We may have a race condition here if a digest is computed here by thread A, the state is changed
-                    // + contractStateChangeFlags set afterwards by thread B and contractStateChangeFlags cleared below below
-                    // by thread A. We then have a changed state but a cleared contractStateChangeFlags flag leading to wrong
-                    // digest.
-                    // This is currently avoided by calling getComputerDigest() from tick processor only (and in non-concurrent init)
-                    contractStateLock[digestIndex].acquireRead();
-
-                    const unsigned long long startTick = __rdtsc();
-                    KangarooTwelve(contractStates[digestIndex], (unsigned int) size, &contractStateDigests[digestIndex], 32);
-                    const unsigned long long executionTicks = __rdtsc() - startTick;
-
-                    contractStateLock[digestIndex].releaseRead();
-
-                    // K12 of state is included in contract execution time
-                    _interlockedadd64(&contractTotalExecutionTicks[digestIndex], executionTicks);
-
-                    // Gather data for comparing different versions of K12
-                    if (K12MeasurementsCount < 500) {
-                        K12MeasurementsSum += executionTicks;
-                        K12MeasurementsCount++;
-                    }
-                }
-            }
-        }
-        unsigned int previousLevelBeginning = 0;
-        unsigned int numberOfLeafs = MAX_NUMBER_OF_CONTRACTS;
-        while (numberOfLeafs > 1) {
-            for (unsigned int i = 0; i < numberOfLeafs; i += 2) {
-                if (true || contractStateChangeFlags[i >> 6] & (3ULL << (i & 63))) {
-                    KangarooTwelve64To32(&contractStateDigests[previousLevelBeginning + i], &contractStateDigests[digestIndex]);
-                    contractStateChangeFlags[i >> 6] &= ~(3ULL << (i & 63));
-                    contractStateChangeFlags[i >> 7] |= (1ULL << ((i >> 1) & 63));
-                }
-                digestIndex++;
-            }
-            previousLevelBeginning += numberOfLeafs;
-            numberOfLeafs >>= 1;
-        }
-        contractStateChangeFlags[0] = 0;
-
-        etalonTick.saltedComputerDigest = contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
-    } else {
+        getComputerDigest(etalonTick.saltedComputerDigest);
     }
 
     // prepare custom mining shares packet ONCE
