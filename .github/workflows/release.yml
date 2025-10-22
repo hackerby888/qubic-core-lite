@@ -11,13 +11,13 @@ jobs:
   build-linux:
     uses: ./.github/workflows/linux-build.yml
     with:
-      configuration: ${{ env.BUILD_CONFIGURATION }}
-      build_dir: ${{ env.RELEASE_BUILD_DIR }}
+      configuration: "Release"
+      build_dir: "build"
 
   build-windows:
     uses: ./.github/workflows/window-build.yml
     with:
-      configuration: ${{ env.BUILD_CONFIGURATION }}
+      configuration: "Release"
 
   publish-linux:
     needs: build-linux
