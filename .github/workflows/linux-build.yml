@@ -15,7 +15,7 @@ on:
         type: string
       build_dir:
         description: "Build directory"
-        required: true
+        required: false
         default: "build"
         type: string
 
