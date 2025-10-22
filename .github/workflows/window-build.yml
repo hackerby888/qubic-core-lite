@@ -49,7 +49,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: QubicLiteBuildOutput
+        name: QubicLiteWindowsBuild-${{ env.BUILD_CONFIGURATION }}
         path: |
           **/x64/${{ env.BUILD_CONFIGURATION }}/
           **/x64/${{ env.BUILD_CONFIGURATION }}/

@@ -1,0 +1,25 @@
+name: release.yml
+on:
+  push:
+    tags: ["*"]
+jobs:
+  build-linux:
+    uses: ./.github/workflows/linux-build.yml
+    with:
+      configuration: "Release"
+
+  publish-linux:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: QubicLiteLinuxBuild-Release
+
+      - name: Create release package
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/src/Qubic
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
