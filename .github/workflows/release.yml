@@ -32,8 +32,8 @@ jobs:
       - name: Create release package
         uses: softprops/action-gh-release@v2
         with:
-          name: "Mainnet Executable Release ${{ github.ref_name }} - Linux"
-          body: "Mainnet release of QubicCoreLite executables."
+          name: "Mainnet Executable Release ${{ github.ref_name }}"
+          body: "Mainnet release of Qubic Core Lite executables."
           files: ${{ env.RELEASE_BUILD_DIR }}/src/Qubic
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,8 +51,6 @@ jobs:
       - name: Create Windows release package
         uses: softprops/action-gh-release@v2
         with:
-          name: "Mainnet Windows Release ${{ github.ref_name }}"
-          body: "Mainnet release of QubicCoreLite Windows executable."
           files: ${{ env.RELEASE_BUILD_DIR }}/**/x64/Release/Qubic.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
