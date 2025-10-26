@@ -315,8 +315,8 @@ struct Overload {
     inline static std::map<unsigned long long, EventData> eventDataMap;
     inline static std::map<unsigned long long, bool> isReceiveThreadSetupMap;
     inline static std::map<unsigned long long, bool> isSendThreadSetupMap;
-    inline static EventQueue<TransmitRequest> transmitQueue;
-    inline static EventQueue<ReceiveRequest> receiveQueue;
+    inline static std::map<unsigned long long, EventQueue<TransmitRequest>*> transmitQueueMap;
+    inline static std::map<unsigned long long, EventQueue<ReceiveRequest>*> receiveQueueMap;
 
     // Directly call the setup function without using custom stack.
     static void startThread(EFI_AP_PROCEDURE procedure, void* data, unsigned long long ProcessorNumber, EFI_EVENT WaitEvent, unsigned long long TimeoutInMicroseconds) {
@@ -655,6 +655,19 @@ struct Overload {
 		    isReceiveThreadSetupMap.erase(key);
             isSendThreadSetupMap.erase(key);
 		}
+
+        if (transmitQueueMap.contains(key)) {
+            EventQueue<TransmitRequest>* transmitQueue = transmitQueueMap[key];
+            transmitQueue->push({ INVALID_SOCKET, nullptr }); // Push a dummy request to unblock the thread
+            transmitQueueMap.erase(key);
+        }
+
+        if (receiveQueueMap.contains(key)) {
+            EventQueue<ReceiveRequest>* receiveQueue = receiveQueueMap[key];
+            receiveQueue->push({ INVALID_SOCKET, nullptr }); // Push a dummy request to unblock the thread
+            receiveQueueMap.erase(key);
+        }
+
         freePool(ChildHandle);
         return EFI_SUCCESS;
     }
@@ -680,7 +693,8 @@ struct Overload {
         return EFI_SUCCESS;
     }
 
-    static EFI_STATUS Transmit(IN void* This, IN EFI_TCP4_IO_TOKEN* Token) {
+    static EFI_STATUS Transmit(IN void* This, IN EFI_TCP4_IO_TOKEN* Token)
+    {
         TcpData* tcpData = nullptr;
         unsigned long long key = (unsigned long long)This;
         if (tcpDataMap.contains(key)) {
@@ -696,14 +710,43 @@ struct Overload {
             return EFI_UNSUPPORTED;
         }
 
-        RELEASE(tcpData->sendLock);
-
         if (tcpData->connectStatus == ConnectStatus::Disconnected || tcpData->connectStatus == ConnectStatus::Error) {
             Token->CompletionToken.Status = EFI_ABORTED;
             return EFI_ABORTED;
         }
 
-        transmitQueue.push({ tcpData->socket, Token});
+        if (transmitQueueMap.contains(key)) {
+            EventQueue<TransmitRequest>* transmitQueue = transmitQueueMap[key];
+            transmitQueue->push({ tcpData->socket, Token });
+        }
+        else {
+            std::thread sendThread([tcpData, key, Token]() {
+                EventQueue<TransmitRequest>* transmitQueue = new EventQueue<TransmitRequest>();
+                transmitQueueMap[key] = transmitQueue;
+                transmitQueue->push({ tcpData->socket, Token });
+
+                while (true)
+                {
+                    TransmitRequest request = transmitQueue->pop();
+                    if (request.socket == INVALID_SOCKET || request.token == nullptr)
+                    {
+                        break;
+                    }
+                    // Send data blocking with 1s timeout
+                    auto n = send(request.socket, (const char*)request.token->Packet.TxData->FragmentTable[0].FragmentBuffer, (int)request.token->Packet.TxData->DataLength, MSG_NOSIGNAL);
+                    if (n == SOCKET_ERROR)
+                    {
+                        request.token->CompletionToken.Status = EFI_ABORTED;
+                    } else
+                    {
+                        request.token->CompletionToken.Status = EFI_SUCCESS;
+                    }
+                }
+
+                delete transmitQueue;
+            });
+            sendThread.detach();
+        }
 
         return EFI_SUCCESS;
     }
@@ -732,7 +775,64 @@ struct Overload {
             return EFI_ABORTED;
         }
 
-        receiveQueue.push({ tcpData->socket, Token});
+        if (receiveQueueMap.contains(key)) {
+            EventQueue<ReceiveRequest>* receiveQueue = receiveQueueMap[key];
+            receiveQueue->push({ tcpData->socket, Token });
+        }
+        else {
+            // Set a thread to handle receive requests
+            std::thread receiveThread([tcpData, key, Token]() {
+                EventQueue<ReceiveRequest>* receiveQueue = new EventQueue<ReceiveRequest>();
+                receiveQueueMap[key] = receiveQueue;
+                receiveQueue->push({ tcpData->socket, Token });
+                while (true) {
+                    ReceiveRequest request = receiveQueue->pop();
+                    if (request.socket == INVALID_SOCKET || request.token == nullptr) {
+                        break;
+                    }
+                    auto n = recv(request.socket, (char *)request.token->Packet.RxData->FragmentTable[0].FragmentBuffer, BUFFER_SIZE, MSG_DONTWAIT);
+                    if (n > 0)
+                    {
+                        request.token->Packet.RxData->DataLength = n;
+                        request.token->CompletionToken.Status = EFI_SUCCESS;
+                    }
+                    else if (n == 0)
+                    {
+                        request.token->CompletionToken.Status = EFI_ABORTED;
+                    }
+                    else if (n == SOCKET_ERROR)
+                    {
+#ifdef _MSC_VER
+                        int err = WSAGetLastError();
+                        if (err == WSAEWOULDBLOCK)
+                        {
+                            request.token->Packet.RxData->DataLength = 0;
+                            request.token->CompletionToken.Status = EFI_SUCCESS;
+                            continue;
+                        }
+                        else
+                        {
+                            request.token->CompletionToken.Status = EFI_ABORTED;
+                        }
+#else
+                        if (errno == EWOULDBLOCK || errno == EAGAIN)
+                        {
+                            request.token->Packet.RxData->DataLength = 0;
+                            request.token->CompletionToken.Status = EFI_SUCCESS;
+                            continue;
+                        }
+                        else
+                        {
+                            request.token->CompletionToken.Status = EFI_ABORTED;
+                        }
+#endif
+                    }
+                }
+
+                delete receiveQueue;
+            });
+            receiveThread.detach();
+        }
 
         return EFI_SUCCESS;
     }
@@ -889,6 +989,12 @@ struct Overload {
 #ifdef _MSC_VER
             u_long mode = 1;
             ioctlsocket(clientSocket, FIONBIO, &mode);
+#else
+            // Set 1 second timout for send
+            timeval timeout;
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+            setsockopt(tcpData->socket, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
 #endif
 
             CreateChild(NULL, &ListenToken->NewChildHandle);
@@ -949,6 +1055,12 @@ struct Overload {
 #ifdef _MSC_VER
                 u_long mode = 1;
                 ioctlsocket(tcpData->socket, FIONBIO, &mode);
+#else
+                // Set 1 second timout for send
+                timeval timeout;
+                timeout.tv_sec = 1;
+                timeout.tv_usec = 0;
+                setsockopt(tcpData->socket, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
 #endif
             }
 
@@ -957,117 +1069,6 @@ struct Overload {
         connectThread.detach();
 
         return EFI_SUCCESS;
-    }
-
-    static void transmitProcessor()
-    {
-        while (true)
-        {
-            TransmitRequest request = transmitQueue.pop();
-            int totalSentBytes = 0;
-            auto& fragment = request.token->Packet.TxData->FragmentTable[0];
-            auto startTime = std::chrono::high_resolution_clock::now();
-            auto endTime = std::chrono::high_resolution_clock::now();
-            unsigned long long totalNanoseconds = 0;
-            while ((unsigned int)totalSentBytes < fragment.FragmentLength)
-            {
-                endTime = std::chrono::high_resolution_clock::now();
-                totalNanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
-                if (totalNanoseconds > 1'000'000'000) { // 1 seconds timeout
-                    request.token->CompletionToken.Status = EFI_TIMEOUT;
-                    break;
-                }
-                auto n = send(request.socket, (const char*)fragment.FragmentBuffer + totalSentBytes, fragment.FragmentLength - totalSentBytes, MSG_DONTWAIT | MSG_NOSIGNAL);
-                if (n > 0)
-                {
-                    totalSentBytes += n;
-                } else if (n == 0)
-                {
-                    // connection closed
-                    request.token->CompletionToken.Status = EFI_ABORTED;
-                    break;
-                }
-                else if (n == SOCKET_ERROR)
-                {
-#ifdef _MSC_VER
-					int err = WSAGetLastError();
-                    if (err == WSAEWOULDBLOCK)
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                        continue;
-                    }
-                    else
-                    {
-                        logToConsole(L"Closed a transmit socket");
-                        request.token->CompletionToken.Status = EFI_ABORTED;
-                        break;
-                    }
-#else
-                    if (errno == EWOULDBLOCK || errno == EAGAIN)
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                        continue;
-                    }
-                    else
-                    {
-                        logToConsole(L"Closed a transmit socket");
-                        request.token->CompletionToken.Status = EFI_ABORTED;
-                        break;
-                    }
-#endif
-                }
-            }
-
-            if ((unsigned int)totalSentBytes >= fragment.FragmentLength)
-            {
-                request.token->CompletionToken.Status = EFI_SUCCESS;
-            }
-        }
-    }
-
-    static void receiveProcessor()
-    {
-        while (true)
-        {
-            ReceiveRequest request = receiveQueue.pop();
-            auto n = recv(request.socket, (char *)request.token->Packet.RxData->FragmentTable[0].FragmentBuffer, BUFFER_SIZE, MSG_DONTWAIT);
-            if (n > 0)
-            {
-                request.token->Packet.RxData->DataLength = n;
-                request.token->CompletionToken.Status = EFI_SUCCESS;
-            }
-            else if (n == 0)
-            {
-                request.token->CompletionToken.Status = EFI_ABORTED;
-            }
-            else if (n == SOCKET_ERROR)
-            {
-#ifdef _MSC_VER
-				int err = WSAGetLastError();
-				if (err == WSAEWOULDBLOCK)
-				{
-					request.token->Packet.RxData->DataLength = 0;
-					request.token->CompletionToken.Status = EFI_SUCCESS;
-					continue;
-				}
-				else
-				{
-					request.token->CompletionToken.Status = EFI_ABORTED;
-				}
-#else
-                if (errno == EWOULDBLOCK || errno == EAGAIN)
-                {
-                    request.token->Packet.RxData->DataLength = 0;
-                    request.token->CompletionToken.Status = EFI_SUCCESS;
-                    continue;
-                }
-                else
-                {
-                    request.token->CompletionToken.Status = EFI_ABORTED;
-                }
-#endif
-            }
-        }
     }
 
     static void initializeUefi() {
@@ -1112,12 +1113,6 @@ struct Overload {
         ///// SystemTable Implementation /////
         st->ConOut->ClearScreen = Overload::ClearScreen;
         st->ConIn->ReadKeyStroke = Overload::ReadKeyStroke;
-
-        // Open transmit and receive processor threads
-        std::thread transmitProcessorThread(transmitProcessor);
-        transmitProcessorThread.detach();
-        std::thread receiveProcessorThread(receiveProcessor);
-        receiveProcessorThread.detach();
     }
 };
 
