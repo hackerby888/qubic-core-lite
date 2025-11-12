@@ -1392,7 +1392,7 @@ static const unsigned char whiteListPeers[][4] = {
 };
 */
 
-#define ENABLE_QUBIC_LOGGING_EVENT 0 // turn on logging events
+#define ENABLE_QUBIC_LOGGING_EVENT 1 // turn on logging events
 
 #if ENABLE_QUBIC_LOGGING_EVENT
 // DO NOT MODIFY THIS AREA UNLESS YOU ARE DEVELOPING LOGGING FEATURES
