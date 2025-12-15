@@ -36,8 +36,7 @@
 #define system qsystem
 #endif
 
-// #define NO_QRAFFLE
-// #define OLD_QSWAP
+// #define OLD_CCF
 
 // contract_def.h needs to be included first to make sure that contracts have minimal access
 #include "contract_core/contract_def.h"
@@ -1472,6 +1471,16 @@ static void processRequestSystemInfo(Peer* peer, RequestResponseHeader* header)
     respondedSystemInfo.currentEntityBalanceDustThreshold = (dustThresholdBurnAll > dustThresholdBurnHalf) ? dustThresholdBurnAll : dustThresholdBurnHalf;
 
     respondedSystemInfo.targetTickVoteSignature = TARGET_TICK_VOTE_SIGNATURE;
+
+    if (broadcastedComputors.computors.epoch != 0)
+    {
+        copyMem(&respondedSystemInfo.computorPacketSignature, broadcastedComputors.computors.signature, 8);
+    }
+    else
+    {
+        respondedSystemInfo.computorPacketSignature = 0;
+    }
+    
     enqueueResponse(peer, sizeof(respondedSystemInfo), RespondSystemInfo::type(), header->dejavu(), &respondedSystemInfo);
 }
 
