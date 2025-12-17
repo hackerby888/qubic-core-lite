@@ -16,7 +16,7 @@
 
 ////////////////// USER CONFIGURABLE OPTIONS (default is for mainnet with swap feature) \\\\\\\\\\\\\\\\
 
-#define TESTNET // COMMENT this line if you want to compile for mainnet
+// #define TESTNET // COMMENT this line if you want to compile for mainnet
 
 // this option enables using disk as RAM to reduce hardware requirement for qubic core node
 // it is highly recommended to enable this option if you want to run a full mainnet node on SSD
@@ -8089,5 +8089,6 @@ int main(int argc, const char* argv[]) {
     std::raise(SIGTERM);
     return status;
 }
+
 
 
