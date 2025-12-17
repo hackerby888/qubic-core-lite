@@ -96,7 +96,7 @@ find_package(fmt REQUIRED)
     platform_common
     platform_efi
     c++ c++abi
-    Threads::Threads drogon fmt::fmt
+    Threads::Threads drogon fmt::fmt-header-only
   )
 # endif()
 
