@@ -67,6 +67,23 @@ private:
             });
 
         app.registerHandler(
+            "/tick-info",
+            [](const HttpRequestPtr &req,
+               std::function<void(const HttpResponsePtr &)> &&callback)
+            {
+                Json::Value json;
+                json["epoch"] = system.epoch;
+                json["tick"] = system.tick;
+                json["initialTick"] = system.initialTick;
+                json["alignedVotes"] = gTickNumberOfComputors;
+                json["misalignedVotes"] = gTickTotalNumberOfComputors - gTickNumberOfComputors;
+                json["mainAuxStatus"] = mainAuxStatus;
+                json["duration"] = 0;
+                auto resp = HttpResponse::newHttpJsonResponse(json);
+                callback(resp);
+            });
+
+        app.registerHandler(
             "/running-ids",
             [](const HttpRequestPtr &req,
                std::function<void(const HttpResponsePtr &)> &&callback)
