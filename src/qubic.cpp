@@ -6364,6 +6364,33 @@ static bool initialize()
         }
     }
 
+#ifdef TESTNET
+    // if there missing universe for testnet, we should give 676 shares for it.
+    if (isAllBytesZero(assets, ASSETS_CAPACITY))
+    {
+        logToConsole(L"No universe provided, giving testnet shares to all contracts ...");
+        for (unsigned int i = 1; i < contractCount; i++)
+        {
+            int issuanceIndex, ownershipIndex, possessionIndex;
+            if (!issueAsset(m256i::zero(), (char*)contractDescriptions[i].assetName, 0, CONTRACT_ASSET_UNIT_OF_MEASUREMENT, NUMBER_OF_COMPUTORS, i, &issuanceIndex, &ownershipIndex, &possessionIndex))
+            {
+                logToConsole(L"issueAsset() failed!");
+                return false;
+            }
+        }
+    }
+
+    // if the contract 0 is missing, we should give default executionFee for it
+    if (isAllBytesZero(contractStates[0], contractDescriptions[0].stateSize))
+    {
+        logToConsole(L"No contract 0 state provided, giving testnet execution fee reserve (10B by default for each contract) ...");
+        for (unsigned int i = 1; i < contractCount; i++)
+        {
+           addToContractFeeReserve(i, 10'000'000'000);
+        }
+    }
+#endif
+
     initializeContractErrors();
     initializeContracts();
 
