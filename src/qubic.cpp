@@ -21,7 +21,7 @@
 // this option enables using disk as RAM to reduce hardware requirement for qubic core node
 // it is highly recommended to enable this option if you want to run a full mainnet node on SSD
 // UNCOMMENT this line to enable it
-// #define USE_SWAP
+#define USE_SWAP
 
 //////////////////////////////////////////////////////////////
 
@@ -8089,6 +8089,7 @@ int main(int argc, const char* argv[]) {
     std::raise(SIGTERM);
     return status;
 }
+
 
 
 
