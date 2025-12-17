@@ -94,7 +94,6 @@ find_package(Threads REQUIRED)
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    c++ c++abi
     Threads::Threads drogon
   )
 # endif()
