@@ -49,6 +49,10 @@ if(CMAKE_NO_USE_SWAP)
     target_compile_definitions(Qubic PRIVATE CMAKE_NO_USE_SWAP)
 endif()
 
+if(NO_RPC)
+    target_compile_definitions(Qubic PRIVATE NO_RPC)
+endif()
+
 if(DEFINED ENABLE_QUBIC_LOGGING_EVENT)
     target_compile_definitions(Qubic PRIVATE ENABLE_QUBIC_LOGGING_EVENT=${ENABLE_QUBIC_LOGGING_EVENT})
 endif()
@@ -94,7 +98,6 @@ find_package(Threads REQUIRED)
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    c++ c++abi
     Threads::Threads drogon
   )
 # endif()
