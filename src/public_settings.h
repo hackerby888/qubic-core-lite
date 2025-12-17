@@ -104,6 +104,8 @@ static wchar_t SCORE_CACHE_FILE_NAME[] = L"score.???";
 static wchar_t CONTRACT_FILE_NAME[] = L"contract????.???";
 static wchar_t CUSTOM_MINING_REVENUE_END_OF_EPOCH_FILE_NAME[] = L"custom_revenue.eoe";
 static wchar_t CUSTOM_MINING_CACHE_FILE_NAME[] = L"custom_mining_cache.???";
+static wchar_t CONTRACT_EXEC_FEES_ACC_FILE_NAME[] = L"contract_exec_fees_acc.???";
+static wchar_t CONTRACT_EXEC_FEES_REC_FILE_NAME[] = L"contract_exec_fees_rec.???";
 
 static constexpr unsigned long long NUMBER_OF_INPUT_NEURONS = 512;     // K
 static constexpr unsigned long long NUMBER_OF_OUTPUT_NEURONS = 512;    // L
@@ -152,3 +154,5 @@ static unsigned int gFullExternalComputationTimes[][2] =
 #define STACK_SIZE 4194304
 #define TRACK_MAX_STACK_BUFFER_SIZE
 
+static constexpr unsigned long long EXECUTION_TIME_MULTIPLIER_NUMERATOR = 1ULL;
+static constexpr unsigned long long EXECUTION_TIME_MULTIPLIER_DENOMINATOR = 1ULL;  // Use values like (1, 10) for division by 10
