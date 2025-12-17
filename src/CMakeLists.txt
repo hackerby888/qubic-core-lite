@@ -49,6 +49,10 @@ if(CMAKE_NO_USE_SWAP)
     target_compile_definitions(Qubic PRIVATE CMAKE_NO_USE_SWAP)
 endif()
 
+if(NO_RPC)
+    target_compile_definitions(Qubic PRIVATE NO_RPC)
+endif()
+
 if(DEFINED ENABLE_QUBIC_LOGGING_EVENT)
     target_compile_definitions(Qubic PRIVATE ENABLE_QUBIC_LOGGING_EVENT=${ENABLE_QUBIC_LOGGING_EVENT})
 endif()
@@ -80,7 +84,6 @@ elseif(IS_MSVC)
 endif()
 
 find_package(Threads REQUIRED)
-find_package(fmt REQUIRED)
 # Link with platform libraries
 # if(BUILD_TESTS)
 #   # When building for tests, link only with platform_common and platform_os
@@ -95,8 +98,7 @@ find_package(fmt REQUIRED)
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    c++ c++abi
-    Threads::Threads drogon fmt::fmt-header-only
+    Threads::Threads drogon
   )
 # endif()
 
