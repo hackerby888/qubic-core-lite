@@ -5,10 +5,12 @@ static unsigned long long httpPasscodes[4] = {};
 #ifdef __linux__
 
 #include <drogon/drogon.h>
+
+#ifndef NO_RPC
 #include "controller/rpc_queryv2_controller.h"
 #include "controller/rpc_live_controller.h"
 #include "controller/rpc_stats_controller.h"
-#include "ticking/tick_storage.h"
+#endif
 
 using namespace drogon;
 
@@ -140,156 +142,6 @@ private:
                     jsonObject["publishTick"] = solutionPublicationTicks[i];
                     json.append(jsonObject);
                 }
-                auto resp = HttpResponse::newHttpJsonResponse(json);
-                callback(resp);
-            });
-
-        app.registerHandler(
-            "/tick-data/{1}",
-            [](const HttpRequestPtr &req,
-               std::function<void(const HttpResponsePtr &)> &&callback,
-               const std::string &tickStr)
-            {
-                unsigned int tick = std::stoul(tickStr);
-                TickData localTickData;
-                TickStorage::tickData.acquireLock();
-                TickData* tickData = TickStorage::tickData.getByTickIfNotEmpty(tick);
-                if (tickData)
-                {
-                    copyMem(&localTickData, tickData, sizeof(TickData));
-                }
-                TickStorage::tickData.releaseLock();
-                if (!tickData)
-                {
-                    auto resp = HttpResponse::newHttpResponse();
-                    resp->setStatusCode(k404NotFound);
-                    resp->setBody("Tick data not found");
-                    callback(resp);
-                    return;
-                }
-
-                Json::Value json;
-                json["tick"] = localTickData.tick;
-                json["epoch"] = localTickData.epoch;
-                json["computorIndex"] = localTickData.computorIndex;
-                json["millisecond"] = localTickData.millisecond;
-                json["second"] = localTickData.second;
-                json["minute"] = localTickData.minute;
-                json["hour"] = localTickData.hour;
-                json["day"] = localTickData.day;
-                json["month"] = localTickData.month;
-                json["year"] = localTickData.year;
-                json["timelock"] = byteToHex((unsigned char*)&localTickData.timelock, sizeof(m256i));
-                Json::Value txDigestsJson(Json::arrayValue);
-                for (unsigned int i = 0; i < NUMBER_OF_TRANSACTIONS_PER_TICK; i++)
-                {
-                    if (localTickData.transactionDigests[i] != m256i::zero())
-                        txDigestsJson.append(byteToHex((unsigned char*)&localTickData.transactionDigests[i], sizeof(m256i)));
-                }
-                json["transactionDigests"] = txDigestsJson;
-                Json::Value contractFeesJson(Json::arrayValue);
-                for (unsigned int i = 0; i < MAX_NUMBER_OF_CONTRACTS; i++)
-                {
-                    contractFeesJson.append(Json::UInt64(localTickData.contractFees[i]));
-                }
-                json["contractFees"] = contractFeesJson;
-                json["signature"] = byteToHex((unsigned char*)localTickData.signature, SIGNATURE_SIZE);
-
-                auto resp = HttpResponse::newHttpJsonResponse(json);
-                callback(resp);
-            });
-
-        app.registerHandler(
-            "/tick/{1}",
-            [](const HttpRequestPtr &req,
-               std::function<void(const HttpResponsePtr &)> &&callback,
-               const std::string &tickStr)
-            {
-                unsigned int tick = std::stoul(tickStr);
-                Tick localTicks[NUMBER_OF_COMPUTORS];
-                setMem(localTicks, sizeof(localTicks), 0);
-                for (int i = 0; i < NUMBER_OF_COMPUTORS; i++)
-                {
-                    TickStorage::ticks.acquireLock(i);
-                    Tick* tickVote = TickStorage::ticks.getByTickInCurrentEpoch(tick) + i;
-                    if (tickVote)
-                        copyMem(&localTicks[i], tickVote, sizeof(Tick));
-                    TickStorage::ticks.releaseLock(i);
-                }
-                Json::Value json(Json::arrayValue);
-                for (int i = 0; i < NUMBER_OF_COMPUTORS; i++)
-                {
-                    if (isAllBytesZero(localTicks + i, sizeof(Tick)))
-                        continue;
-
-                    Json::Value tickJson;
-                    tickJson["tick"] = localTicks[i].tick;
-                    tickJson["epoch"] = localTicks[i].epoch;
-                    tickJson["computorIndex"] = localTicks[i].computorIndex;
-                    tickJson["millisecond"] = localTicks[i].millisecond;
-                    tickJson["second"] = localTicks[i].second;
-                    tickJson["minute"] = localTicks[i].minute;
-                    tickJson["hour"] = localTicks[i].hour;
-                    tickJson["day"] = localTicks[i].day;
-                    tickJson["month"] = localTicks[i].month;
-                    tickJson["year"] = localTicks[i].year;
-                    tickJson["prevResourceTestingDigest"] = Json::UInt64(localTicks[i].prevResourceTestingDigest);
-                    tickJson["saltedResourceTestingDigest"] = Json::UInt64(localTicks[i].saltedResourceTestingDigest);
-                    tickJson["prevTransactionBodyDigest"] = Json::UInt64(localTicks[i].prevTransactionBodyDigest);
-                    tickJson["saltedTransactionBodyDigest"] = Json::UInt64(localTicks[i].saltedTransactionBodyDigest);
-                    tickJson["prevSpectrumDigest"] = byteToHex((unsigned char*)&localTicks[i].prevSpectrumDigest, sizeof(m256i));
-                    tickJson["prevUniverseDigest"] = byteToHex((unsigned char*)&localTicks[i].prevUniverseDigest, sizeof(m256i));
-                    tickJson["prevComputerDigest"] = byteToHex((unsigned char*)&localTicks[i].prevComputerDigest, sizeof(m256i));
-                    tickJson["saltedSpectrumDigest"] = byteToHex((unsigned char*)&localTicks[i].saltedSpectrumDigest, sizeof(m256i));
-                    tickJson["saltedUniverseDigest"] = byteToHex((unsigned char*)&localTicks[i].saltedUniverseDigest, sizeof(m256i));
-                    tickJson["saltedComputerDigest"] = byteToHex((unsigned char*)&localTicks[i].saltedComputerDigest, sizeof(m256i));
-                    tickJson["transactionDigest"] = byteToHex((unsigned char*)&localTicks[i].transactionDigest, sizeof(m256i));
-                    tickJson["expectedNextTickTransactionDigest"] = byteToHex((unsigned char*)&localTicks[i].expectedNextTickTransactionDigest, sizeof(m256i));
-                    tickJson["signature"] = byteToHex((unsigned char*)localTicks[i].signature, SIGNATURE_SIZE);
-                    json.append(tickJson);
-                }
-                auto resp = HttpResponse::newHttpJsonResponse(json);
-                callback(resp);
-            });
-
-        app.registerHandler(
-            "/transaction/{1}",
-            [](const HttpRequestPtr &req,
-               std::function<void(const HttpResponsePtr &)> &&callback,
-               const std::string &txId)
-            {
-                m256i txDigest;
-                hexToByte(txId, sizeof(m256i), (unsigned char*)&txDigest);
-                Transaction localTransaction;
-                TickStorage::transactionsDigestAccess.acquireLock();
-                const Transaction* transaction = TickStorage::transactionsDigestAccess.findTransaction(txDigest);
-                if (transaction)
-                {
-                    copyMem(&localTransaction, transaction, sizeof(Transaction));
-                }
-                TickStorage::transactionsDigestAccess.releaseLock();
-                if (!transaction)
-                {
-                    auto resp = HttpResponse::newHttpResponse();
-                    resp->setStatusCode(k404NotFound);
-                    resp->setBody("Transaction not found");
-                    callback(resp);
-                    return;
-                }
-
-                Json::Value json;
-                CHAR16 humanId[61] = {0};
-                getIdentity((const unsigned char*)&localTransaction.sourcePublicKey, humanId, false);
-                json["sourcePublicKey"] = wchar_to_string(humanId);
-                getIdentity((const unsigned char*)&localTransaction.destinationPublicKey, humanId, false);
-                json["destinationPublicKey"] = wchar_to_string(humanId);
-                json["amount"] = Json::UInt64(localTransaction.amount);
-                json["tick"] = localTransaction.tick;
-                json["inputType"] = localTransaction.inputType;
-                json["inputSize"] = localTransaction.inputSize;
-                json["inputData"] = byteToHex(localTransaction.inputPtr(), localTransaction.inputSize);
-                json["signature"] = byteToHex(localTransaction.signaturePtr(), SIGNATURE_SIZE);
-
                 auto resp = HttpResponse::newHttpJsonResponse(json);
                 callback(resp);
             });
