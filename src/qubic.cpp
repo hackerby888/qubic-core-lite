@@ -6334,7 +6334,7 @@ static bool initialize()
                 appendText(message, L".");
                 logToConsole(message);
             }
-            if (!loadContractStateFiles())
+            if (!loadContractStateFiles() && (!canObmitLoadNodeState))
                 return false;
 #ifndef START_NETWORK_FROM_SCRATCH
             if (!loadContractExecFeeFiles() && (!canObmitLoadNodeState))
