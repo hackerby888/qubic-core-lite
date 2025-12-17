@@ -6368,14 +6368,26 @@ static bool initialize()
     // if there missing universe for testnet, we should give 676 shares for it.
     if (isAllBytesZero(assets, ASSETS_CAPACITY))
     {
+        AssetStorage::indexLists.rebuild();
         logToConsole(L"No universe provided, giving testnet shares to all contracts ...");
         for (unsigned int i = 1; i < contractCount; i++)
         {
             int issuanceIndex, ownershipIndex, possessionIndex;
-            if (!issueAsset(m256i::zero(), (char*)contractDescriptions[i].assetName, 0, CONTRACT_ASSET_UNIT_OF_MEASUREMENT, NUMBER_OF_COMPUTORS, i, &issuanceIndex, &ownershipIndex, &possessionIndex))
+            if (!issueAsset(m256i::zero(), (char*)contractDescriptions[i].assetName, 0, CONTRACT_ASSET_UNIT_OF_MEASUREMENT, NUMBER_OF_COMPUTORS, QX_CONTRACT_INDEX, &issuanceIndex, &ownershipIndex, &possessionIndex))
             {
                 logToConsole(L"issueAsset() failed!");
                 return false;
+            }
+            for (int comIndex = 0; comIndex < NUMBER_OF_COMPUTORS; comIndex++)
+            {
+                auto broadcastedId = broadcastedComputors.computors.publicKeys[comIndex];
+                int destinationOwnershipIndex, destinationPossessionIndex;
+                bool isTransferOk = transferShareOwnershipAndPossession(ownershipIndex, possessionIndex, broadcastedId, 1, &destinationOwnershipIndex, &destinationPossessionIndex, true);
+                if (!isTransferOk)
+                {
+                    logToConsole(L"transferShareOwnershipAndPossession() failed!");
+                    return false;
+                }
             }
         }
     }
@@ -6386,7 +6398,7 @@ static bool initialize()
         logToConsole(L"No contract 0 state provided, giving testnet execution fee reserve (10B by default for each contract) ...");
         for (unsigned int i = 1; i < contractCount; i++)
         {
-           addToContractFeeReserve(i, 10'000'000'000);
+           setContractFeeReserve(i, 10'000'000'000);
         }
     }
 #endif
