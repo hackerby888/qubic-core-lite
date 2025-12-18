@@ -1,8 +1,5 @@
 # Qubic Core Lite
 
-[Check changes](https://github.com/hackerby888/qubic-core-lite/compare/main...qubic-core-lite-main:qcl-main:main)
-[Check merge from original to main](https://github.com/qubic-core-lite-main/qubic-core-lite/compare/main...hackerby888:qubic-core-lite:main)
-
 [![Build](https://github.com/hackerby888/qubic-core-lite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hackerby888/qubic-core-lite/actions/workflows/ci.yml)
 
 The lite version of Qubic Core that can run directly on the OS without a UEFI environment.
@@ -204,4 +201,5 @@ Delete the **system** file at your current working folder, it may make your node
 ## Donate The Project
 
 QUBIC Wallet: QPROLAPACSPVBDQADRXXKRGZMXADUAEXXJIQNWPGWFUFUAITRXMHVODDLGBK
+
 
