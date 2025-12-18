@@ -30,6 +30,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(drogon)
 
+FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG 12.1.0
+)
+
+FetchContent_MakeAvailable(fmt)
+
 # Define the shared library (matches Visual Studio DynamicLibrary configuration)
 add_executable(
   Qubic
@@ -98,7 +106,7 @@ find_package(Threads REQUIRED)
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    Threads::Threads drogon
+    Threads::Threads drogon fmt::fmt
   )
 # endif()
 
