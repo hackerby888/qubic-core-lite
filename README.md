@@ -166,6 +166,8 @@ Press **F12** to switch to **MAIN** mode to make the network start ticking (proc
 
 ## RPC
 
+> This feature only available in Linux!
+
 Qubic Core Lite provides a built-in RPC API that enables developers to interact directly with a Lite node with official RPC style, removing the need for an original complex RPC layer.
 
 ### Status
@@ -201,5 +203,6 @@ Delete the **system** file at your current working folder, it may make your node
 ## Donate The Project
 
 QUBIC Wallet: QPROLAPACSPVBDQADRXXKRGZMXADUAEXXJIQNWPGWFUFUAITRXMHVODDLGBK
+
 
 
