@@ -34,6 +34,11 @@ static const unsigned char whiteListPeers[][4] = {
 
 #define ENABLE_QUBIC_LOGGING_EVENT 1 // turn on logging events
 
+#ifdef NO_ENABLE_QUBIC_LOGGING_EVENT
+#undef ENABLE_QUBIC_LOGGING_EVENT
+#define ENABLE_QUBIC_LOGGING_EVENT 0
+#endif
+
 // Virtual memory settings for logging
 #define LOG_BUFFER_PAGE_SIZE 300000000ULL
 #define PMAP_LOG_PAGE_SIZE 30000000ULL

@@ -61,8 +61,8 @@ if(NO_RPC)
     target_compile_definitions(Qubic PRIVATE NO_RPC)
 endif()
 
-if(DEFINED ENABLE_QUBIC_LOGGING_EVENT)
-    target_compile_definitions(Qubic PRIVATE ENABLE_QUBIC_LOGGING_EVENT=${ENABLE_QUBIC_LOGGING_EVENT})
+if(NO_ENABLE_QUBIC_LOGGING_EVENT)
+    target_compile_definitions(Qubic PRIVATE NO_ENABLE_QUBIC_LOGGING_EVENT)
 endif()
 
 # Set specific properties for assembly files to avoid C++ flags being applied
