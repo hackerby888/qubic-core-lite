@@ -846,6 +846,8 @@ public:
             setMem(pageHasExtraBytes, pageHasExtraBytesBufferSize, 0);
             setMem(lastestPageExtraBytesOffsetAccessed, lastestPageExtraBytesOffsetAccessedBufferSize, 0xff);
         }
+        VMBase::deinit();
+        VMBase::init();
     }
 
     bool init()

@@ -915,6 +915,7 @@ public:
             tickDataSwapVM.reset();
             ticksSwapVM.reset();
             tickTransactionsSwapVM.reset();
+            tickTransactionsDigestSwapVM.reset();
 #endif
 
 #ifndef NDEBUG
