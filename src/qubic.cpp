@@ -6242,11 +6242,14 @@ static bool initialize()
         lastExpectedTickTransactionDigest = m256i::zero();
 
         // Init custom mining data. Reset function will be called in beginEpoch()
+        logToConsole(L"customMiningInitialize() ...");
         customMiningInitialize();
 
+        logToConsole(L"Beginning epoch ...");
         beginEpoch();
 
         // needs to be called after ts.beginEpoch() because it looks up tickIndex, which requires to setup begin of epoch in ts
+        logToConsole(L"updateNumberOfTickTransactions...");
         updateNumberOfTickTransactions();
 
 #if TICK_STORAGE_AUTOSAVE_MODE
