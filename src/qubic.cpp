@@ -8213,6 +8213,12 @@ unsigned long long getTotalRam()
     totalRam += ts.getTickTransactionsDigestPtrSize() / 10;
 #endif
 
+    // logging size
+    totalRam += qLogger::logBuffer.getVmStateSize();
+    totalRam += qLogger::mapLogIdToBufferIndex.getVmStateSize();
+    totalRam += qLogger::mapTxToLogId.getVmStateSize();
+
+
     return totalRam;
 }
 
