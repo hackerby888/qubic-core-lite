@@ -612,6 +612,11 @@ public:
         return pageCapacity * sizeof(T);
     }
 
+    unsigned long long getVmStateSize()
+    {
+        return numCachePage * getPageSize();
+    }
+
     const T* getCurrentPagePtr()
     {
         return currentPage;
@@ -846,6 +851,8 @@ public:
             setMem(pageHasExtraBytes, pageHasExtraBytesBufferSize, 0);
             setMem(lastestPageExtraBytesOffsetAccessed, lastestPageExtraBytesOffsetAccessedBufferSize, 0xff);
         }
+        VMBase::deinit();
+        VMBase::init();
     }
 
     bool init()

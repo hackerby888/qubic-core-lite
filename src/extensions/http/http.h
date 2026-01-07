@@ -79,6 +79,7 @@ private:
                 json["misalignedVotes"] = gTickTotalNumberOfComputors - gTickNumberOfComputors;
                 json["mainAuxStatus"] = mainAuxStatus;
                 json["duration"] = 0;
+                json["isSavingSnapshot"] = (bool)persistingNodeStateTickProcWaiting;
                 auto resp = HttpResponse::newHttpJsonResponse(json);
                 callback(resp);
             });
