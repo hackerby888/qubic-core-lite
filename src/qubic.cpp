@@ -5323,6 +5323,28 @@ void reprocessSolutionTransaction(unsigned long long processorNumber)
     ts.tickData.releaseLock();
 }
 
+void checkAllContractLocksReleased()
+{
+    int currentIndex = 0;
+    for (auto &lock : contractStateLock)
+    {
+        if (lock.isLockedForWriting())
+        {
+            while (true)
+            {
+                logToConsole(L"Fatal Error: contract lock not released after processing tick | Line ");
+                appendNumber(message, __LINE__, true);
+                logToConsole(message);
+                logToConsole(L"Current contract index is ");
+                appendNumber(message, currentIndex, true);
+                logToConsole(message);
+                bs->Stall(1'000'000);
+            }
+        }
+        currentIndex++;
+    }
+}
+
 // Disabling the optimizer for tickProcessor() is a workaround introduced to solve an issue
 // that has been observed in testnets/2025-04-30-profiling.
 // In this test, the processor calling tickProcessor() was stuck before entering the function.
@@ -5375,6 +5397,10 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                 }
                 processTick(processorNumber);
                 latestProcessedTick = system.tick;
+
+                // safety check for contract locks
+                // after processing a tick, all contract locks should be released
+                checkAllContractLocksReleased();
             }
 
             if (gFutureTickTotalNumberOfComputors > NUMBER_OF_COMPUTORS - QUORUM)
