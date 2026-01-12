@@ -42,6 +42,10 @@ TEST_F(ReadWriteLockTest, TryAcquireRead) {
     EXPECT_EQ(lock.getCurrentReaderLockCount(), 2);
     lock.releaseRead();
     EXPECT_EQ(lock.getCurrentReaderLockCount(), 1);
+    // extpect fail when try write
+    EXPECT_FALSE(lock.tryAcquireWrite());
+    lock.releaseRead();
+    EXPECT_EQ(lock.getCurrentReaderLockCount(), 0);
 }
 
 // Test tryAcquireWrite functionality
