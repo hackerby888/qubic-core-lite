@@ -66,6 +66,8 @@ add_executable(
    		uint128.cpp
    		virtual_memory.cpp
    		vote_counter.cpp
+		read_write_lock.cpp
+		setjump.cpp
 )
 
 # Apply test-specific compiler flags from the centralized detection module

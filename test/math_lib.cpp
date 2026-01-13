@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-
+#include "platform/msvc_polyfill.h"
 #include <cmath>
 #include "../src/contracts/math_lib.h"
 
