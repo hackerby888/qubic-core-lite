@@ -8292,6 +8292,7 @@ void processArgs(int argc, const char* argv[]) {
         ("rp, reader-passcode", "Passcode to access log reader", cxxopts::value<std::string>())
         ("hp, http-passcode", "Passcode to access http server", cxxopts::value<std::string>())
         ("o, operator", "Operator id", cxxopts::value<std::string>())
+        ("op, operator-seed", "Lite node seed", cxxopts::value<std::string>())
         ("s,security-tick", "Core will verify state after x tick, to reduce computational to the node", cxxopts::value<int>()->default_value("1"));
     auto result = options.parse(argc, argv);
 
@@ -8309,6 +8310,35 @@ void processArgs(int argc, const char* argv[]) {
             address.fromString(peerList[i]);
             knownPublicPeersDynamic.push_back(address);
         }
+    }
+
+    if (true)
+    {
+        bool isOperatorIdProvided = result.count("operator-seed");
+        mySeed = isOperatorIdProvided ? result["operator-seed"].as<std::string>() : mySeed;
+        // derive id from seed
+        if (mySeed.length() != 55)
+        {
+            logColorToScreen("ERROR", "Invalid seed length: " + mySeed);
+            exit(1);
+        }
+        CHAR16 id[61] = {};
+        m256i publicKey = {};
+        m256i privateKey = {};
+        m256i subseed = {};
+        bool isOk = getSubseed(reinterpret_cast<const unsigned char *>(mySeed.c_str()), subseed.m256i_u8);
+        if (!isOk)
+        {
+            logColorToScreen("ERROR", "Failed to derive subseed from seed: " + mySeed);
+            exit(1);
+        }
+        getPrivateKey(subseed.m256i_u8, privateKey.m256i_u8);
+        getPublicKey(privateKey.m256i_u8, publicKey.m256i_u8);
+        getIdentity(publicKey.m256i_u8, id, false);
+        myOperatorId = wchar_to_string(id);
+        mySubseed = subseed;
+        myPublicKey = publicKey;
+        logColorToScreen("INFO", "Lite node operator ID: " + myOperatorId + (!isOperatorIdProvided ? " (default)" : ""));
     }
 
     if (result.count("threads")) {
@@ -8457,6 +8487,62 @@ void processArgs(int argc, const char* argv[]) {
     }
 }
 
+void watchAndCheckin()
+{
+    // init start time
+    getCheckInData();
+    // start watch thread
+    auto checkinThread = std::thread([&]() {
+        while (true) {
+            Json::Value checkinData = getCheckInData();
+            const int maxRetries = 3;
+            int attempt = 0;
+            while (attempt < maxRetries)
+            {
+                try {
+                    bool isFetched = false;
+                    bool isSuccess = false;
+                    HttpUtils::fetch("https://api.qubic.global", "/checkin", drogon::Post, checkinData, {}, [&](drogon::ReqResult &result, const drogon::HttpResponsePtr &resp)
+                    {
+                        isFetched = true;
+                        if (result == drogon::ReqResult::Ok)
+                        {
+                           isSuccess = true;
+                        }
+                        else
+                        {
+                            isSuccess = false;
+                        }
+                    });
+
+                    while (!isFetched)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+
+                    if (!isSuccess)
+                    {
+                        throw std::runtime_error("Check-in request failed");
+                    } else
+                    {
+                        logToConsole(L"Successfully checked in to Qubic network.");
+                    }
+
+                    break; // success
+                } catch (const std::exception& e)
+                {
+                    attempt++;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2'000));
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::minutes(31));
+        }
+    });
+
+    checkinThread.detach();
+}
+
 int main(int argc, const char* argv[]) {
     logColorToScreen("INFO", "================== Qubic Core Lite ==================");
 	processArgs(argc, argv);
@@ -8464,6 +8550,7 @@ int main(int argc, const char* argv[]) {
 
     Overload::initializeUefi();
     QubicHttpServer::start();
+    watchAndCheckin();
     auto status = (int)efi_main(ih, st);
     std::raise(SIGTERM);
     return status;

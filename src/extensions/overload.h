@@ -36,9 +36,70 @@
 #define CreateEvent CreateEvent
 #include "platform/console_logging.h"
 
+#include <json/config.h>
+#include <json/value.h>
+#include <json/writer.h>
+
 static volatile bool forceDontCheckComputerDigest = false;
 static std::vector<int> forceDontUseSecurityTickChangeStack;
 static volatile bool forceDontUseSecurityTick = false;
+
+//////////// Custom Data \\\\\\\\\\\
+
+static std::string mySeed = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+static m256i mySubseed;
+static std::string myOperatorId(60, 0);
+static m256i myPublicKey;
+
+
+/////////// Custom Function \\\\\\\\\\\\
+
+std::string getQubicVersionString()
+{
+    return std::to_string(VERSION_A) + "." +
+           std::to_string(VERSION_B) + "." +
+           std::to_string(VERSION_C);
+}
+
+Json::Value getCheckInData()
+{
+    static auto startTime = std::chrono::system_clock::now();
+
+    auto jsonToBytes = [](const Json::Value& json) -> std::vector<unsigned char> {
+        Json::StreamWriterBuilder writer;
+        writer["indentation"] = ""; // No indentation for compact representation
+        std::string jsonString = Json::writeString(writer, json);
+
+        return std::vector<unsigned char>(jsonString.begin(), jsonString.end());
+    };
+
+    Json::Value checkinData;
+    try
+    {
+        checkinData["type"] = "lite";
+        checkinData["version"] = getQubicVersionString();
+        checkinData["alias"] = "My Qubic Lite Node";
+        checkinData["operator"] = myOperatorId;
+        // unix timestamp
+        checkinData["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
+                                       std::chrono::system_clock::now().time_since_epoch()).count();
+        checkinData["uptime"] = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now() - startTime).count();
+
+        uint8_t hash[32];
+        auto checkinBytes = jsonToBytes(checkinData);
+        KangarooTwelve(checkinBytes.data(), checkinBytes.size(), hash, 32);
+        uint8_t signature[SIGNATURE_SIZE];
+        sign(mySubseed.m256i_u8, myPublicKey.m256i_u8, hash, signature);
+
+        checkinData["signature"] = byteToHex(signature, SIGNATURE_SIZE);
+        checkinData["messageHex"] = byteToHex(checkinBytes.data(), checkinBytes.size());
+    } catch (const std::exception& e)
+    {
+    }
+
+    return checkinData;
+}
 
 //////////// Go Behind Testnet Trick \\\\\\\\
 
