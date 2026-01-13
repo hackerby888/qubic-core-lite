@@ -23,6 +23,7 @@ add_custom_command(
 find_package(fmt CONFIG REQUIRED)
 find_package(Drogon CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
 # Define the shared library (matches Visual Studio DynamicLibrary configuration)
 add_executable(
@@ -78,7 +79,7 @@ endif()
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    Threads::Threads Drogon::Drogon fmt::fmt
+    Threads::Threads Drogon::Drogon fmt::fmt JsonCpp::JsonCpp
   )
 # endif()
 
