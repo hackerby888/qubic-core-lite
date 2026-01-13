@@ -1,4 +1,48 @@
 cmake_minimum_required(VERSION 3.15)
+
+# Enable vcpkg integration
+set(VCPKG_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg")
+if(NOT EXISTS "${VCPKG_ROOT_DIR}")
+    message(STATUS "vcpkg not found. Cloning vcpkg...")
+    execute_process(
+            COMMAND git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT_DIR}"
+            RESULT_VARIABLE GIT_CLONE_RESULT
+    )
+
+    if(NOT GIT_CLONE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to clone vcpkg repository.")
+    endif()
+
+    message(STATUS "Bootstrapping vcpkg...")
+    if(WIN32)
+        execute_process(COMMAND "${VCPKG_ROOT_DIR}/bootstrap-vcpkg.bat")
+    else()
+        execute_process(COMMAND "${VCPKG_ROOT_DIR}/bootstrap-vcpkg.sh")
+    endif()
+endif()
+
+# Set the toolchain file so CMake uses vcpkg for find_package()
+set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT_DIR}/scripts/buildsystems/vcpkg.cmake"
+        CACHE STRING "Vcpkg toolchain file")
+
+# Determine the correct static triplet based on the OS
+if(WIN32)
+    set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
+elseif(APPLE)
+    set(VCPKG_TARGET_TRIPLET "x64-osx-static" CACHE STRING "") # Or arm64-osx-static
+else()
+    set(VCPKG_TARGET_TRIPLET "x64-linux" CACHE STRING "")
+endif()
+
+# Force vcpkg to use static linkage for the CRT (Required for Windows Static)
+if(MSVC)
+    set(VCPKG_CRT_LINKAGE "static" CACHE STRING "")
+endif()
+
+# Inform CMake to prefer static libraries globally
+set(VCPKG_LIBRARY_LINKAGE "static" CACHE STRING "")
+
+# Project definition
 project(qubic CXX)
 
 # Set C++ standard

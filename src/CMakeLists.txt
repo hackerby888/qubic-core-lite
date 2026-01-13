@@ -5,9 +5,6 @@ project(qubic_core CXX ASM_NASM)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Enable FetchContent module
-include(FetchContent)
-
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/lib/)
@@ -22,21 +19,10 @@ add_custom_command(
     COMMENT "Assembling ${ASM_FILE}"
 )
 
-# Extra libraries
-FetchContent_Declare(
-        drogon
-        GIT_REPOSITORY https://github.com/drogonframework/drogon.git
-        GIT_TAG v1.9.11
-)
-FetchContent_MakeAvailable(drogon)
-
-FetchContent_Declare(
-        fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-        GIT_TAG 12.1.0
-)
-
-FetchContent_MakeAvailable(fmt)
+# 2. Find Dependencies (Vcpkg handles these)
+find_package(fmt CONFIG REQUIRED)
+find_package(Drogon CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 # Define the shared library (matches Visual Studio DynamicLibrary configuration)
 add_executable(
@@ -45,25 +31,12 @@ add_executable(
   ${ASM_OBJ}
 )
 
-if(TESTNET)
-    target_compile_definitions(Qubic PRIVATE TESTNET)
-endif()
-
-if(ONLY_LOGGING)
-    target_compile_definitions(Qubic PRIVATE ONLY_LOGGING)
-endif()
-
-if(CMAKE_NO_USE_SWAP)
-    target_compile_definitions(Qubic PRIVATE CMAKE_NO_USE_SWAP)
-endif()
-
-if(NO_RPC)
-    target_compile_definitions(Qubic PRIVATE NO_RPC)
-endif()
-
-if(NO_ENABLE_QUBIC_LOGGING_EVENT)
-    target_compile_definitions(Qubic PRIVATE NO_ENABLE_QUBIC_LOGGING_EVENT)
-endif()
+set(QUBIC_DEFS TESTNET ONLY_LOGGING CMAKE_NO_USE_SWAP NO_RPC NO_ENABLE_QUBIC_LOGGING_EVENT)
+foreach(DEF ${QUBIC_DEFS})
+    if(${DEF})
+        target_compile_definitions(Qubic PRIVATE ${DEF})
+    endif()
+endforeach()
 
 # Set specific properties for assembly files to avoid C++ flags being applied
 set_source_files_properties(platform/custom_stack.nasm PROPERTIES
@@ -91,7 +64,6 @@ elseif(IS_MSVC)
     )
 endif()
 
-find_package(Threads REQUIRED)
 # Link with platform libraries
 # if(BUILD_TESTS)
 #   # When building for tests, link only with platform_common and platform_os
@@ -106,7 +78,7 @@ find_package(Threads REQUIRED)
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    Threads::Threads drogon fmt::fmt
+    Threads::Threads Drogon::Drogon fmt::fmt
   )
 # endif()
 
