@@ -80,6 +80,7 @@ private:
                 json["mainAuxStatus"] = mainAuxStatus;
                 json["duration"] = 0;
                 json["isSavingSnapshot"] = (bool)persistingNodeStateTickProcWaiting;
+                json["extraInfo"] = getCheckInData();
                 auto resp = HttpResponse::newHttpJsonResponse(json);
                 callback(resp);
             });
