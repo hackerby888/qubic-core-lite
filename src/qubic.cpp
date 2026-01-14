@@ -8487,6 +8487,7 @@ void processArgs(int argc, const char* argv[]) {
     }
 }
 
+#ifdef __linux__
 void watchAndCheckin()
 {
     // init start time
@@ -8542,6 +8543,7 @@ void watchAndCheckin()
 
     checkinThread.detach();
 }
+#endif
 
 int main(int argc, const char* argv[]) {
     logColorToScreen("INFO", "================== Qubic Core Lite ==================");
@@ -8550,7 +8552,9 @@ int main(int argc, const char* argv[]) {
 
     Overload::initializeUefi();
     QubicHttpServer::start();
+#ifdef __linux__
     watchAndCheckin();
+#endif
     auto status = (int)efi_main(ih, st);
     std::raise(SIGTERM);
     return status;

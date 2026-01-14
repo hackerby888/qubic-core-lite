@@ -36,14 +36,6 @@
 #define CreateEvent CreateEvent
 #include "platform/console_logging.h"
 
-#include <json/config.h>
-#include <json/value.h>
-#include <json/writer.h>
-
-static volatile bool forceDontCheckComputerDigest = false;
-static std::vector<int> forceDontUseSecurityTickChangeStack;
-static volatile bool forceDontUseSecurityTick = false;
-
 //////////// Custom Data \\\\\\\\\\\
 
 static std::string mySeed = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -51,6 +43,11 @@ static m256i mySubseed;
 static std::string myOperatorId(60, 0);
 static m256i myPublicKey;
 
+
+#if defined(__linux__)
+#include <json/config.h>
+#include <json/value.h>
+#include <json/writer.h>
 
 /////////// Custom Function \\\\\\\\\\\\
 
@@ -100,6 +97,11 @@ Json::Value getCheckInData()
 
     return checkinData;
 }
+#endif
+
+static volatile bool forceDontCheckComputerDigest = false;
+static std::vector<int> forceDontUseSecurityTickChangeStack;
+static volatile bool forceDontUseSecurityTick = false;
 
 //////////// Go Behind Testnet Trick \\\\\\\\
 
