@@ -274,6 +274,20 @@ private:
                 callback(resp);
             }, {drogon::Get, "MiddleWare::PasscodeVerifier"});
 
+        app.registerHandler("/spam",
+            [](const HttpRequestPtr &req,
+               std::function<void(const HttpResponsePtr &)> &&callback)
+            {
+                // get query parameters
+                bool enable = req->getParameter("on") == "true" || req->getParameter("on") == "1";
+                enableBadBoySpammer = enable;
+                Json::Value json;
+                json["status"] = "ok";
+                json["spamEnabled"] = enableBadBoySpammer;
+                auto resp = HttpResponse::newHttpJsonResponse(json);
+                callback(resp);
+            }, {drogon::Get});
+
         app.run();
     }
 public:
