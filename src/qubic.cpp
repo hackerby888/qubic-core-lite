@@ -5502,7 +5502,6 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                     doBadBoySpam();
                 });
                 spamThread.detach();
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                 processTick(processorNumber);
                 latestProcessedTick = system.tick;
 
