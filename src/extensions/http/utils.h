@@ -201,4 +201,26 @@ public:
 
         return nullptr;
     }
+
+    static void fetch(const std::string &url, const std::string &path, const drogon::HttpMethod method, const Json::Value &body, const std::map<std::string, std::string> &headers = {}, std::function<void(drogon::ReqResult &result, const drogon::HttpResponsePtr &resp)> callback = nullptr)
+    {
+        auto client = drogon::HttpClient::newHttpClient(url);
+        auto req = drogon::HttpRequest::newHttpJsonRequest(body); // Helper for JSON
+        req->setMethod(method);
+        req->setPath(path);
+
+        // Set headers
+        for (const auto& header : headers) {
+            req->addHeader(header.first, header.second);
+        }
+        // Set type to application/json
+        req->addHeader("Content-Type", "application/json");
+
+        client->sendRequest(req, [&](drogon::ReqResult _result, const drogon::HttpResponsePtr &_resp) {
+            if (callback != nullptr)
+            {
+                callback(_result, _resp);
+            }
+        });
+    }
 };

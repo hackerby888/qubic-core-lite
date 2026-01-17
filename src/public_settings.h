@@ -87,12 +87,12 @@ static_assert(AUTO_FORCE_NEXT_TICK_THRESHOLD* TARGET_TICK_DURATION >= PEER_REFRE
 // Config options that should NOT be changed by operators
 
 #define VERSION_A 1
-#define VERSION_B 273
+#define VERSION_B 274
 #define VERSION_C 0
 
 // Epoch and initial tick for node startup
-#define EPOCH 195
-#define TICK 41622000
+#define EPOCH 196
+#define TICK 42232000
 #define TICK_IS_FIRST_TICK_OF_EPOCH 1 // Set to 0 if the network is restarted during the EPOCH with a new initial TICK
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
@@ -122,9 +122,9 @@ static constexpr unsigned int SOLUTION_THRESHOLD_DEFAULT = 321;
 
 // Signing difficulty
 #ifdef TESTNET
-#define TARGET_TICK_VOTE_SIGNATURE 0x07FFFFFFU  // around 32 signing operations per ID
+#define TARGET_TICK_VOTE_SIGNATURE 0x07FFFFFFULL  // around 32 signing operations per ID
 #else
-#define TARGET_TICK_VOTE_SIGNATURE 0x00095CBEU // around 7000 signing operations per ID
+#define TARGET_TICK_VOTE_SIGNATURE 0x100095CBEULL // around 7000 signing operations per ID
 #endif
 
 // include commonly needed definitions
