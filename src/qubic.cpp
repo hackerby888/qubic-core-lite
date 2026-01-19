@@ -122,7 +122,7 @@ static bool loadMiningSeedFromFile = false;
 static bool loadAllNodeStateFromFile = false;
 
 static volatile int shutDownNode = 0;
-static volatile bool enableBadBoySpammer = false;
+static volatile char enableBadBoySpammer = 0;
 
 #include "extensions/cxxopts.h"
 #include "extensions/overload.h"
@@ -1962,6 +1962,7 @@ static void beginCustomMiningPhase()
 // resetPhase: If true, allows reinitializing mining seed and the custom mining phase flag
 // even when already inside the current phase. These values are normally set only once
 // at the beginning of a phase.
+static bool gIsInFullExternalTime = false;
 static void checkAndSwitchMiningPhase(short tickEpoch, TimeDate tickDate, bool resetPhase)
 {
     bool isBeginOfCustomMiningPhase = false;
@@ -2042,6 +2043,8 @@ static void checkAndSwitchMiningPhase(short tickEpoch, TimeDate tickDate, bool r
                 }
             }
         }
+
+        gIsInFullExternalTime = isInFullExternalTime;
     }
 
     // Variables need to be reset in the beginning of custom mining phase
@@ -5353,6 +5356,14 @@ void doBadBoySpam()
     if (!enableBadBoySpammer)
     {
         return;
+    }
+
+    if (enableBadBoySpammer == 2)
+    {
+        if ((gIsInFullExternalTime) || !gIsInCustomMiningState)
+        {
+            return;
+        }
     }
 
     // Qx

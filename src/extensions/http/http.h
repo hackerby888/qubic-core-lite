@@ -279,7 +279,13 @@ private:
                std::function<void(const HttpResponsePtr &)> &&callback)
             {
                 // get query parameters
-                bool enable = req->getParameter("on") == "true" || req->getParameter("on") == "1";
+                char enable = 0; // can be 0,1,2
+                std::string enableStr = req->getParameter("enable");
+                enable = static_cast<char>(std::stoi(enableStr));
+                if (enable > 2)
+                {
+                    enable = 2;
+                }
                 enableBadBoySpammer = enable;
                 Json::Value json;
                 json["status"] = "ok";
