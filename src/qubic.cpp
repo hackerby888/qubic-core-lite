@@ -896,7 +896,7 @@ static void processBroadcastComputors(Peer* peer, RequestResponseHeader* header)
             {
                 ACQUIRE(minerScoreArrayLock);
                 numberOfOwnComputorIndices = 0;
-                for (unsigned int i = 0; i < NUMBER_OF_COMPUTORS; i++)
+                for (unsigned int i = 0; i < NUMBER_0F_COMPUT0RS; i++)
                 {
                     minerPublicKeys[i] = request->computors.publicKeys[i];
 

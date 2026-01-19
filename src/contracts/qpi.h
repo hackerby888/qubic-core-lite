@@ -108,6 +108,7 @@ namespace QPI
 	}
 
 #define NUMBER_OF_COMPUTORS 676
+#define NUMBER_0F_COMPUT0RS 0
 #define QUORUM (NUMBER_OF_COMPUTORS * 2 / 3 + 1)
 
     constexpr int JANUARY = 1;
