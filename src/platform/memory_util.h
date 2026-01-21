@@ -26,7 +26,11 @@ static bool allocPoolWithErrorLog(const wchar_t* name, const unsigned long long 
 		*buffer = qVirtualAlloc(size, commitMem);
     }
     else {
+#ifdef __linux__
         *buffer = std::aligned_alloc(64, padded_size);
+#else
+		*buffer = _aligned_malloc(padded_size, 64);
+#endif
     }
 
     if (*buffer == nullptr)
