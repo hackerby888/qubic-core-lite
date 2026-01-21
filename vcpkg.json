@@ -1,0 +1,9 @@
+{
+  "name": "qubic-core-lite",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "fmt",
+    "jsoncpp",
+    "drogon"
+  ]
+}
