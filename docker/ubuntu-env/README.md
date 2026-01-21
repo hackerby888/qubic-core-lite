@@ -45,7 +45,7 @@ printf "#################################################\n\n"
 How to stop and remove the container:
 
 ```bash
-docker stop qubic-global-env && docker rm qubic-global-env
+docker stop qubic-global-env-container && docker rm qubic-global-env-container
 ```
 
 # Port using
