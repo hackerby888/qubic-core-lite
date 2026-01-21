@@ -28,8 +28,12 @@ RUN apt-get update \
 COPY configure-ssh-user.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/configure-ssh-user.sh
 
-# Expose SSH port
-EXPOSE 22
+# Expose ports
+EXPOSE 22 # SSH port
+EXPOSE 21841 # Lite node port (qubic p2p network)
+EXPOSE 41841 # Lite node http port
+EXPOSE 21842 # Bob node port (bob p2p network)
+EXPOSE 40420 # Bob node http port
 
 # Start SSH server
 CMD ["/usr/local/bin/configure-ssh-user.sh"]

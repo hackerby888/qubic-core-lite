@@ -21,7 +21,7 @@ docker build -t qlite-env .
 
 # Run the container with SSH access
 MY_QLITE_SSH_PASSWORD="$(tr -dc A-Za-z0-9 < /dev/urandom | head -c 16)"
-docker run -d --name qlite-env-container -p 222:22 -e SSH_USERNAME=root -e SSH_PASSWORD=$MY_QLITE_SSH_PASSWORD qlite-env:latest
+docker run -d --name qlite-env-container -p 222:22 -p 21841:21841 -p 41841:41841 -p 21842:21842 -p 40420:40420 -e SSH_USERNAME=root -e SSH_PASSWORD=$MY_QLITE_SSH_PASSWORD qlite-env:latest
 
 printf "\n################### IMPORTANT ###################"
 echo "SSH access to the container is set up. Use the following credentials:"
@@ -35,6 +35,15 @@ How to stop and remove the container:
 ```bash
 docker stop qlite-env-container && docker rm qlite-env-container
 ```
+
+# Port using
+
+The following ports are exposed by the container:
+- `222`: SSH access to the container.
+- `21841`: Qubic P2P port.
+- `41841`: Lite node http port.
+- `21842`: Bob P2P port.
+- `40420`: Bob node http port.
 
 # Notes
 
