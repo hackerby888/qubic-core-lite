@@ -16,24 +16,24 @@ One command to run the container:
 sudo apt update && apt install -y git
 git clone https://github.com/hackerby888/qubic-core-lite.git
 cd qubic-core-lite/docker/ubuntu-env
-docker build -t qlite-env .
+docker build -t qubic-global-env .
 # -----------------------------------
 
 # Run the container with SSH access
-MY_QLITE_SSH_PASSWORD="$(tr -dc A-Za-z0-9 < /dev/urandom | head -c 16)"
-docker run -d --name qlite-env-container -p 222:22 -p 21841:21841 -p 41841:41841 -p 21842:21842 -p 40420:40420 -e SSH_USERNAME=root -e SSH_PASSWORD=$MY_QLITE_SSH_PASSWORD qlite-env:latest
+MY_SSH_PASSWORD="$(tr -dc A-Za-z0-9 < /dev/urandom | head -c 16)"
+docker run -d --name qubic-global-env-container -p 222:22 -p 21841:21841 -p 41841:41841 -p 21842:21842 -p 40420:40420 -e SSH_USERNAME=root -e SSH_PASSWORD=$MY_SSH_PASSWORD qubic-global-env:latest
 
 printf "\n################### IMPORTANT ###################\n"
 echo "SSH access to the container is set up. Use the following credentials:"
 echo "Username: root"
-echo "Password: $MY_QLITE_SSH_PASSWORD"
+echo "Password: $MY_SSH_PASSWORD"
 echo "Connect using: ssh root@ip -p 222"
 ```
 
 How to stop and remove the container:
 
 ```bash
-docker stop qlite-env-container && docker rm qlite-env-container
+docker stop qubic-global-env && docker rm qubic-global-env
 ```
 
 # Port using
