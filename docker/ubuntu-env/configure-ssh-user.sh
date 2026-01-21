@@ -17,6 +17,7 @@ fi
 
 # 4. Also set Root password (so you can login as root if needed)
 echo "root:$SSH_PASSWORD" | chpasswd
+echo "My root credentials: root:$SSH_PASSWORD"
 
 # 5. Enable Root Password Login (Moved outside the IF block)
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config

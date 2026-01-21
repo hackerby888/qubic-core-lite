@@ -17,17 +17,29 @@ sudo apt update && apt install -y git
 git clone https://github.com/hackerby888/qubic-core-lite.git
 cd qubic-core-lite/docker/ubuntu-env
 docker build -t qubic-global-env .
+
+if [ $? -ne 0 ]; then
+    echo "Docker build failed! Stopping here so you can check the logs."
+    exec bash
+fi
+
 # -----------------------------------
 
 # Run the container with SSH access
 MY_SSH_PASSWORD="$(tr -dc A-Za-z0-9 < /dev/urandom | head -c 16)"
 docker run -d --name qubic-global-env-container -p 222:22 -p 21841:21841 -p 41841:41841 -p 21842:21842 -p 40420:40420 -e SSH_USERNAME=root -e SSH_PASSWORD=$MY_SSH_PASSWORD qubic-global-env:latest
 
+if [ $? -ne 0 ]; then
+    echo "Docker run failed! Stopping here so you can check the logs."
+    exec bash
+fi
+
 printf "\n################### IMPORTANT ###################\n"
 echo "SSH access to the container is set up. Use the following credentials:"
 echo "Username: root"
 echo "Password: $MY_SSH_PASSWORD"
 echo "Connect using: ssh root@ip -p 222"
+printf "#################################################\n\n"
 ```
 
 How to stop and remove the container:
