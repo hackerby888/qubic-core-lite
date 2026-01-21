@@ -23,7 +23,7 @@ docker build -t qlite-env .
 MY_QLITE_SSH_PASSWORD="$(tr -dc A-Za-z0-9 < /dev/urandom | head -c 16)"
 docker run -d --name qlite-env-container -p 222:22 -p 21841:21841 -p 41841:41841 -p 21842:21842 -p 40420:40420 -e SSH_USERNAME=root -e SSH_PASSWORD=$MY_QLITE_SSH_PASSWORD qlite-env:latest
 
-printf "\n################### IMPORTANT ###################"
+printf "\n################### IMPORTANT ###################\n"
 echo "SSH access to the container is set up. Use the following credentials:"
 echo "Username: root"
 echo "Password: $MY_QLITE_SSH_PASSWORD"
