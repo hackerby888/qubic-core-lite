@@ -21,11 +21,16 @@ static bool allocPoolWithErrorLog(const wchar_t* name, const unsigned long long 
 {
     static unsigned long long totalMemoryUsed = 0;
     static unsigned long long totalVirtualMemoryUsed = 0;
+    size_t padded_size = (size + 64 - 1) & ~(64 - 1);
     if (useVirtualMem) {
 		*buffer = qVirtualAlloc(size, commitMem);
     }
     else {
-        *buffer = malloc(size);
+#ifdef __linux__
+        *buffer = std::aligned_alloc(64, padded_size);
+#else
+		*buffer = _aligned_malloc(padded_size, 64);
+#endif
     }
 
     if (*buffer == nullptr)
@@ -36,12 +41,12 @@ static bool allocPoolWithErrorLog(const wchar_t* name, const unsigned long long 
 
     // Zero out allocated memory
     if(!useVirtualMem)
-     setMem(*buffer, size, 0);
+     setMem(*buffer, padded_size, 0);
 
     if (useVirtualMem) {
         totalVirtualMemoryUsed += size;
     }
-    totalMemoryUsed += size;
+    totalMemoryUsed += padded_size;
     // setText(message, L"Memory allocated ");
     // appendNumber(message, size / 1048576, TRUE);
     // appendText(message, L" MiB for ");

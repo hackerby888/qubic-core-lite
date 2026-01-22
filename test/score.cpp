@@ -298,7 +298,7 @@ static void processHelper(const unsigned char* miningSeed, const unsigned char* 
 // Recursive template to process each element in scoreSettings
 template <char profiling, unsigned long long N>
 static void process(const unsigned char* miningSeed, const  unsigned char* publicKey, const unsigned char* nonce,
-    int sampleIndex = 0, score_engine::AlgoType algo = score_engine::AlgoType::AllAlgo)
+    int sampleIndex = 0, score_engine::AlgoType algo = score_engine::AlgoType::MaxAlgoCount)
 {
     processHelper<profiling, N>(miningSeed, publicKey, nonce, sampleIndex, algo, std::make_index_sequence<N>{});
 }

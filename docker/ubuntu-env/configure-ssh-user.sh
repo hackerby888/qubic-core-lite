@@ -24,12 +24,17 @@ sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 # 6. Set Authorized Keys
-if [ -n "$AUTHORIZED_KEYS" ]; then
-    mkdir -p /home/$SSH_USERNAME/.ssh
-    echo "$AUTHORIZED_KEYS" > /home/$SSH_USERNAME/.ssh/authorized_keys
-    chown -R $SSH_USERNAME:$SSH_USERNAME /home/$SSH_USERNAME/.ssh
-    chmod 700 /home/$SSH_USERNAME/.ssh
-    chmod 600 /home/$SSH_USERNAME/.ssh/authorized_keys
+if [ -n "$AUTHORIZED_KEYS" ] && [ -n "$SSH_USERNAME" ]; then
+    USER_HOME=$(getent passwd "$SSH_USERNAME" | cut -d: -f6) || exit 1
+
+    mkdir -p "$USER_HOME/.ssh"
+
+    printf "%s\n" "$AUTHORIZED_KEYS" | tr -d '\r' > "$USER_HOME/.ssh/authorized_keys"
+
+    chmod 700 "$USER_HOME/.ssh"
+    chmod 600 "$USER_HOME/.ssh/authorized_keys"
+
+    chown -R "$SSH_USERNAME:$SSH_USERNAME" "$USER_HOME/.ssh" 2>/dev/null || true
 fi
 
 # 7. Start SSH

@@ -1,8 +1,9 @@
 #pragma once
 
+#include <cstring>
+#include <lib/platform_common/compiler_warnings.h>
 #include <lib/platform_common/qintrin.h>
 #include <lib/platform_common/qstdint.h>
-#include <lib/platform_common/compiler_warnings.h>
 
 // Used for all kinds of IDs, including in QPI and contracts.
 // Existing interface and behavior should never be changed! (However, it may be extended.)
@@ -121,8 +122,9 @@ union m256i
     void assign(const m256i& value) noexcept
     {
         // supports self-assignment
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(this),
-                        _mm256_lddqu_si256(reinterpret_cast<const __m256i*>(&value)));
+        // _mm256_storeu_si256(reinterpret_cast<__m256i*>(this),
+        //                 _mm256_lddqu_si256(reinterpret_cast<const __m256i*>(&value)));
+        memcpy(this->m256i_u8, value.m256i_u8, 32);
     }
 
     void assign(const m256i& value) volatile noexcept
