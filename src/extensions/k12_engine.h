@@ -133,4 +133,12 @@ public:
             return 1;
         return XKCP::KangarooTwelve_Final(&ktInstance, output, nullptr, 0);
     }
+
+    void markChunkChanged(unsigned int chunkIndex)
+    {
+        if (chunkIndex < maxChunks)
+        {
+            isChunkChangedMap[chunkIndex] = true;
+        }
+    }
 };
