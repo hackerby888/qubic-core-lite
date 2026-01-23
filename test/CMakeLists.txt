@@ -68,6 +68,7 @@ add_executable(
    		vote_counter.cpp
 		read_write_lock.cpp
 		setjump.cpp
+		k12_engine.cpp
 )
 
 # Apply test-specific compiler flags from the centralized detection module

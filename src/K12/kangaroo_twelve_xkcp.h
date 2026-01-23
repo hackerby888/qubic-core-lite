@@ -4,7 +4,9 @@
 
 #include "platform/memory.h"
 
-namespace XKCP{
+namespace
+{
+namespace XKCP {
 
 typedef unsigned char uint8_t;
 typedef unsigned long long uint64_t;
@@ -1501,3 +1503,5 @@ namespace K12xkcp
 } // namespace K12xkcp
 #endif
 } // namespace XKPC
+
+}
