@@ -285,11 +285,13 @@ public:
 
     void registerUserFaultFD()
     {
+        if (isUffdRegistered) return;
+
         // register region for write-protect tracking
         uffdio_register reg{};
         reg.range.start = (uint64_t)_state;
         reg.range.len = paddedSize;
-        reg.mode = UFFDIO_REGISTER_MODE_WP;
+        reg.mode = UFFDIO_REGISTER_MODE_WP | UFFDIO_REGISTER_MODE_MISSING;
 
         if (ioctl(uffd.get(), UFFDIO_REGISTER, &reg) == -1)
             throw std::runtime_error("UFFDIO_REGISTER failed");
@@ -311,23 +313,47 @@ public:
 
                     if (msg.event != UFFD_EVENT_PAGEFAULT) continue;
 
+                    auto flags = msg.arg.pagefault.flags;
+
+                    bool is_wp = flags & UFFD_PAGEFAULT_FLAG_WP;
+                    bool is_minor = flags & UFFD_PAGEFAULT_FLAG_MINOR;
+
+                    // If neither is set → MISSING
+                    bool is_missing = !is_wp && !is_minor;
+
                     auto accessAddress = msg.arg.pagefault.address;
                     auto pageAddress = msg.arg.pagefault.address & ~(page_size - 1);
 
-                    // TODO
-                    size_t offset = accessAddress - (uint64_t)_state;
-                    unsigned int chunkIndex = offset / K12_chunkSize;
-                    markChunkChanged(chunkIndex);
-                    printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
-                           contractIndex, (unsigned long long)accessAddress, chunkIndex);
+                    // handle write-protect page fault
+                    if (is_wp)
+                    {
+                        size_t offset = accessAddress - (uint64_t)_state;
+                        unsigned int chunkIndex = offset / K12_chunkSize;
+                        markChunkChanged(chunkIndex);
+                        printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
+                               contractIndex, (unsigned long long)accessAddress, chunkIndex);
 
-                    // remove write-protect so write can continue
-                    uffdio_writeprotect uwp{};
-                    uwp.range.start = pageAddress;
-                    uwp.range.len = page_size;
-                    uwp.mode = 0;
+                        // remove write-protect so write can continue
+                        uffdio_writeprotect uwp{};
+                        uwp.range.start = pageAddress;
+                        uwp.range.len = page_size;
+                        uwp.mode = 0;
 
-                    ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &uwp);
+                        ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &uwp);
+                    }
+
+                    // handle missing page fault
+                    if (is_missing)
+                    {
+                        uffdio_zeropage zp{};
+                        zp.range.start = pageAddress;
+                        zp.range.len = page_size;
+
+                        printf("Page missing at address 0x%llx, zeroing page\n",
+                               (unsigned long long)accessAddress);
+
+                        ioctl(uffd.get(), UFFDIO_ZEROPAGE, &zp);
+                    }
                 }
             });
         handler.detach();
