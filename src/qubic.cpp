@@ -3372,6 +3372,7 @@ static void processTick(unsigned long long processorNumber)
         PROFILE_SCOPE_END();
     }
 
+    auto processTickTime = std::chrono::high_resolution_clock::now();
     PROFILE_NAMED_SCOPE_BEGIN("processTick(): BEGIN_TICK");
     logger.registerNewTx(system.tick, logger.SC_BEGIN_TICK_TX);
     contractProcessorPhase = BEGIN_TICK;
@@ -3532,8 +3533,15 @@ static void processTick(unsigned long long processorNumber)
     etalonTick.saltedSpectrumDigest = spectrumDigests[(SPECTRUM_CAPACITY * 2 - 1) - 1];
     RELEASE(spectrumLock);
     PROFILE_SCOPE_END();
+    auto endProcessTickTime = std::chrono::high_resolution_clock::now();
+    auto processTickDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endProcessTickTime - processTickTime).count();
+    std::cout << "Processing tick transactions took " << processTickDuration << " ms" << " for tick " << system.tick << std::endl;
 
+    auto startGetDigestsTime = std::chrono::high_resolution_clock::now();
     getUniverseDigest(etalonTick.saltedUniverseDigest);
+    auto endGetDigestsTime = std::chrono::high_resolution_clock::now();
+    auto getDigestsDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endGetDigestsTime - startGetDigestsTime).count();
+    std::cout << "getUniverseDigest() took " << getDigestsDuration << " ms" << " for tick " << system.tick << std::endl;
 
     if (isMainMode() || isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch() || isThereQearnTx)
     {
@@ -3544,6 +3552,7 @@ static void processTick(unsigned long long processorNumber)
         std::cout << "getComputerDigest() took " << duration << " ms" << " for tick " << system.tick << std::endl;
     }
 
+    auto mainTime = std::chrono::high_resolution_clock::now();
     // prepare custom mining shares packet ONCE
     if (isMainMode())
     {
@@ -3817,6 +3826,10 @@ static void processTick(unsigned long long processorNumber)
 
     // Will be updated later after have enough info in tickProcessor()
     // logger.updateTick(system.tick);
+
+    auto endMainTime = std::chrono::high_resolution_clock::now();
+    auto mainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endMainTime - mainTime).count();
+    std::cout << "Other main tasks took " << mainDuration << " ms" << " for tick " << system.tick << std::endl;
 }
 
 OPTIMIZE_ON()
