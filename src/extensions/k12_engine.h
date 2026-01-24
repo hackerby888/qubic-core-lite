@@ -347,6 +347,12 @@ public:
 
         if (ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &wp) == -1) {
             std::cout << "Contract " << contractIndex << ": UFFDIO_WRITEPROTECT failesd\n";
+
+            // mark all chunks as changed to be safe
+            for (unsigned int i = 0; i < maxChunks; i++)
+            {
+                isChunkChangedMap[i] = true;
+            }
         }
     }
 
