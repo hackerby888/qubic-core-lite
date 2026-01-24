@@ -1,4 +1,5 @@
 #define NO_UEFI
+#include "platform/msvc_polyfill.h"
 #include "platform/m256.h"
 #include <chrono>
 #include <extensions/k12_engine.h>

@@ -164,7 +164,7 @@ public:
         _stateSize = stateSize;
         maxChunks = (stateSize + K12_chunkSize - 1) / K12_chunkSize;
 
-        isChunkChangedMap.reserve(maxChunks);
+        isChunkChangedMap.resize(maxChunks);
         intermediateMap.resize(maxChunks);
         for (unsigned int i = 0; i < maxChunks; i++)
         {
@@ -233,7 +233,9 @@ class ContractStateEngine : public K12Engine
     static inline std::vector<ContractStateEngine*> allEngines;
     UserFaultFD uffd;
     size_t nonPaddedSize;
+    size_t paddedSize;
     unsigned int contractIndex;
+    bool isUffdRegistered = false;
 
 public:
     static void* allocateState(size_t size) {
@@ -248,7 +250,7 @@ public:
     static bool create(unsigned char **state, size_t stateSize, unsigned int contractIndex) {
         static std::once_flag flag;
         std::call_once(flag, []() {
-            allEngines.reserve(contractCount);
+            allEngines.resize(contractCount);
         });
 
         auto engine = new ContractStateEngine(state, stateSize, contractIndex);
@@ -278,6 +280,7 @@ public:
         *state = _state;
         this->contractIndex = contractIndex;
         this->nonPaddedSize = stateSize;
+        this->paddedSize = alignToPageSize(stateSize);
     }
 
     void registerUserFaultFD()
@@ -285,11 +288,13 @@ public:
         // register region for write-protect tracking
         uffdio_register reg{};
         reg.range.start = (uint64_t)_state;
-        reg.range.len = _stateSize;
+        reg.range.len = paddedSize;
         reg.mode = UFFDIO_REGISTER_MODE_WP;
 
         if (ioctl(uffd.get(), UFFDIO_REGISTER, &reg) == -1)
             throw std::runtime_error("UFFDIO_REGISTER failed");
+
+        isUffdRegistered = true;
 
         // write-protect whole region
         reprotectRegion();
@@ -313,6 +318,8 @@ public:
                     size_t offset = accessAddress - (uint64_t)_state;
                     unsigned int chunkIndex = offset / K12_chunkSize;
                     markChunkChanged(chunkIndex);
+                    printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
+                           contractIndex, (unsigned long long)accessAddress, chunkIndex);
 
                     // remove write-protect so write can continue
                     uffdio_writeprotect uwp{};
@@ -327,17 +334,26 @@ public:
     }
 
     void reprotectRegion() {
+        if (!isUffdRegistered) return;
+
         uffdio_writeprotect wp {};
 
         wp.range.start = (uint64_t)_state;
-        wp.range.len   = _stateSize;
+        wp.range.len   = paddedSize;
 
         // UFFDIO_WRITEPROTECT_MODE_WP: Sets the write-protect bit
         // (If you set mode to 0, it removes protection)
         wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
         if (ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &wp) == -1) {
-            perror("Reprotect ioctl failed");
+            std::cout << "Contract " << contractIndex << ": UFFDIO_WRITEPROTECT failesd\n";
         }
+    }
+
+    int getHashAndReprotect(unsigned char* output, size_t outputByteLen)
+    {
+        int res = getHash(output, outputByteLen);
+        reprotectRegion();
+        return res;
     }
 };

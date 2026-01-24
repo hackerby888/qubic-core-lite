@@ -503,7 +503,7 @@ static void getComputerDigest(m256i& digest)
 
                 const unsigned long long startTime = __rdtsc();
                 auto contractEngine = ContractStateEngine::getEngine(digestIndex);
-                contractEngine->getHash(contractStateDigests[digestIndex].m256i_u8, 32);
+                contractEngine->getHashAndReprotect(contractStateDigests[digestIndex].m256i_u8, 32);
                 const unsigned long long executionTime = __rdtsc() - startTime;
 
                 contractStateLock[digestIndex].releaseRead();
@@ -5426,7 +5426,11 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                     WAIT_WHILE(requestPersistingNodeState);
                     persistingNodeStateTickProcWaiting = 0;
                 }
+                auto startTime = std::chrono::high_resolution_clock::now();
                 processTick(processorNumber);
+                auto endTime = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double, std::milli> processingDuration = endTime - startTime;
+                std::cout << "Tick " << system.tick << " processed in " << processingDuration.count() << " ms" << std::endl;
                 latestProcessedTick = system.tick;
 
                 // safety check for contract locks
