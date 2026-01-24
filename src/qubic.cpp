@@ -123,6 +123,7 @@ static volatile int shutDownNode = 0;
 
 #include "extensions/cxxopts.h"
 #include "extensions/overload.h"
+#include "extensions/k12_engine.h"
 
 TickStorage::TransactionsDigestAccess TickStorage::transactionsDigestAccess;
 #ifdef _WIN32
@@ -501,7 +502,8 @@ static void getComputerDigest(m256i& digest)
                 contractStateLock[digestIndex].acquireRead();
 
                 const unsigned long long startTime = __rdtsc();
-                KangarooTwelve(contractStates[digestIndex], (unsigned int)size, &contractStateDigests[digestIndex], 32);
+                auto contractEngine = ContractStateEngine::getEngine(digestIndex);
+                contractEngine->getHash(contractStateDigests[digestIndex].m256i_u8, 32);
                 const unsigned long long executionTime = __rdtsc() - startTime;
 
                 contractStateLock[digestIndex].releaseRead();
@@ -6245,7 +6247,7 @@ static bool initialize()
         for (unsigned int contractIndex = 0; contractIndex < contractCount; contractIndex++)
         {
             unsigned long long size = contractDescriptions[contractIndex].stateSize;
-            if (!allocPoolWithErrorLog(L"contractStates",  size, (void**)&contractStates[contractIndex], __LINE__))
+            if (!ContractStateEngine::create(&contractStates[contractIndex], size, contractIndex))
             {
                 return false;
             }
@@ -7580,6 +7582,8 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
 
     if (initialize())
     {
+        logToConsole(L"Setting up contract engines ...");
+        ContractStateEngine::registerAllUserFaultFDs();
         logToConsole(L"Setting up multiprocessing ...");
 
         #if !defined(NDEBUG)

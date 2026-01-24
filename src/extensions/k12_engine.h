@@ -1,6 +1,8 @@
 #pragma once
 
 #define _GNU_SOURCE
+#include "contract_core/contract_def.h"
+
 #include <K12/kangaroo_twelve_xkcp.h>
 #include <cstddef>
 #include <cstdint>
@@ -179,7 +181,7 @@ public:
 
     int getHash(unsigned char* output, size_t outputByteLen)
     {
-        if (outputByteLen == _lastOutputSize && isAllChunksUnchanged())
+        if (_lastOutput && outputByteLen == _lastOutputSize && isAllChunksUnchanged())
         {
             // return cached output
             std::memcpy(output, _lastOutput, outputByteLen);
@@ -228,34 +230,54 @@ public:
 // linux userfaultfd integration into K12Engine
 class ContractStateEngine : public K12Engine
 {
+    static inline std::vector<ContractStateEngine*> allEngines;
     UserFaultFD uffd;
     size_t nonPaddedSize;
     unsigned int contractIndex;
+
 public:
-    ContractStateEngine(unsigned char **state, size_t stateSize, unsigned int contractIndex)
-    {
-        size_t padded_size = alignToPageSize(stateSize);
-        void* buf = mmap(nullptr,
-                         padded_size,
-                         PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS,
-                         -1, 0);
+    static void* allocateState(size_t size) {
+        size = alignToPageSize(size);
+        void* buf = mmap(nullptr, size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (buf == MAP_FAILED) throw std::bad_alloc();
+        memset(buf, 0, size);
+        return buf;
+    }
 
-        if (buf == MAP_FAILED) {
-            std::cout << "mmap failed" << std::endl;
-            throw std::bad_alloc();
+    static bool create(unsigned char **state, size_t stateSize, unsigned int contractIndex) {
+        static std::once_flag flag;
+        std::call_once(flag, []() {
+            allEngines.reserve(contractCount);
+        });
+
+        auto engine = new ContractStateEngine(state, stateSize, contractIndex);
+        allEngines[contractIndex] = engine;
+
+        return true;
+    }
+
+    static void registerAllUserFaultFDs() {
+        for (auto engine : allEngines) {
+            if (engine) {
+                engine->registerUserFaultFD();
+            }
         }
-        // Zero out allocated memory
-        *state = buf;
-        setMem(*state, padded_size, 0);
+    }
 
-        // NOTE: K12Engine must use the original stateSize for correct hashing
-        K12Engine::K12Engine(*state, stateSize);
+    static ContractStateEngine* getEngine(unsigned int contractIndex) {
+        if (contractIndex < allEngines.size()) {
+            return allEngines[contractIndex];
+        }
+        return nullptr;
+    }
 
-        uffd = UserFaultFD();
-
-        this->nonPaddedSize = stateSize;
+    ContractStateEngine(unsigned char **state, size_t stateSize, unsigned int contractIndex)
+        : K12Engine((unsigned char*)allocateState(stateSize), stateSize)
+    {
+        *state = _state;
         this->contractIndex = contractIndex;
+        this->nonPaddedSize = stateSize;
     }
 
     void registerUserFaultFD()
