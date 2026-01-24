@@ -3537,7 +3537,11 @@ static void processTick(unsigned long long processorNumber)
 
     if (isMainMode() || isSystemAtSecurityTick() || isNextTickIsSecurityTick() || isLastTickInEpoch() || isThereQearnTx)
     {
+        auto startTime = std::chrono::high_resolution_clock::now();
         getComputerDigest(etalonTick.saltedComputerDigest);
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        std::cout << "getComputerDigest() took " << duration << " ms" << " for tick " << system.tick << std::endl;
     }
 
     // prepare custom mining shares packet ONCE
