@@ -230,6 +230,11 @@ public:
 // linux userfaultfd integration into K12Engine
 class ContractStateEngine : public K12Engine
 {
+    // IO related
+    static constexpr size_t MAX_IO_NAME_LEN = 128;
+    static inline constexpr CHAR16 BASE_DIR[] = L"contract_states/";
+
+    // Lazy loading related
     static inline std::vector<ContractStateEngine*> allEngines;
     UserFaultFD uffd;
     size_t nonPaddedSize;
@@ -281,6 +286,43 @@ public:
         this->contractIndex = contractIndex;
         this->nonPaddedSize = stateSize;
         this->paddedSize = alignToPageSize(stateSize);
+
+        // ensure data pages directory exists
+        CHAR16 dir[MAX_IO_NAME_LEN] = {};
+        getDirectory(dir);
+        createDir(dir);
+    }
+
+    void getDirectory(CHAR16 outDirectory[MAX_IO_NAME_LEN])
+    {
+        CHAR16 contractAssetName[MAX_IO_NAME_LEN] = {};
+        string_to_wchar_t(contractDescriptions[contractIndex].assetName, contractAssetName);
+
+        setText(outDirectory, BASE_DIR);
+        if (contractIndex != 0)
+        {
+            appendText(outDirectory, contractAssetName);
+        } else
+        {
+            appendText(outDirectory, "Contract0State");
+        }
+    }
+
+    void getPageId(CHAR16 pageName[MAX_IO_NAME_LEN], unsigned int chunkIndex)
+    {
+        const ContractDescription *desc = &contractDescriptions[contractIndex];
+        struct
+        {
+            ContractDescription desc;
+            unsigned int chunkIndex;
+        } pageIdStruct;
+        std::memcpy(&pageIdStruct.desc, desc, sizeof(ContractDescription));
+        pageIdStruct.chunkIndex = chunkIndex;
+
+        m256i digest{};
+        KangarooTwelve(&pageIdStruct, sizeof(pageIdStruct), digest.m256i_u8, sizeof(digest));
+        getIdentity(digest.m256i_u8, pageName, true);
+        setMem(pageName + 10, 8, 0);
     }
 
     void registerUserFaultFD()

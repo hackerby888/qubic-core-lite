@@ -3,6 +3,7 @@
 // Helper functions for wchar_t strings in linux (linux expects 32-bit wchar_t, while we use 16-bit wchar_t everywhere else)
 #include "lib/platform_efi/uefi.h"
 #include <codecvt>
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 #include <stdarg.h>
@@ -26,6 +27,17 @@ static std::string wchar_to_string(const wchar_t* wstr) {
     // Convert UTF-16 to UTF-8
     std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
     return convert.to_bytes(u16str);
+}
+
+static void string_to_wchar_t(const std::string str, CHAR16 *outWstr)
+{
+    CHAR16 *wstr = new CHAR16[str.length() + 1];
+    for (size_t i = 0; i < str.length(); i++) {
+        wstr[i] = static_cast<CHAR16>(static_cast<unsigned char>(str[i])); // extend to wchar_t
+    }
+    wstr[str.length()] = 0; // null terminator
+    std::memcpy(outWstr, wstr, (str.length() + 1) * sizeof(CHAR16));
+    delete[] wstr;
 }
 
 #ifdef _MSC_VER

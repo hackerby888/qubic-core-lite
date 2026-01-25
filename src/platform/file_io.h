@@ -158,7 +158,24 @@ static bool createDir(const CHAR16* dirName)
     }
 
     // Create a directory
-    return std::filesystem::create_directory(dirNameStr);
+    std::error_code ec;
+    bool createOk =  std::filesystem::create_directories(dirNameStr, ec);
+    if (createOk && !ec)
+    {
+        std::filesystem::permissions(dirNameStr, std::filesystem::perms::all, std::filesystem::perm_options::replace, ec);
+
+        // set permissions for all father directories (if any)
+        std::filesystem::path currentPath = dirNameStr;
+        while (currentPath.has_parent_path())
+        {
+            currentPath = currentPath.parent_path();
+            std::filesystem::permissions(currentPath, std::filesystem::perms::all, std::filesystem::perm_options::replace, ec);
+        }
+        return true;
+    } else
+    {
+        return false;
+    }
 #else
     ASSERT(isMainProcessor());
     EFI_STATUS status;
