@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <fcntl.h>
 #include <iostream>
 #include <linux/userfaultfd.h>
 #include <mutex>
@@ -15,11 +14,11 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/syscall.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <unordered_map>
+#include <list>
 
 #define SYSTEM_PAGE_SIZE sysconf(_SC_PAGESIZE)
 
@@ -230,9 +229,18 @@ public:
 // linux userfaultfd integration into K12Engine
 class ContractStateEngine : public K12Engine
 {
+    // Global stat
+    static inline size_t totalRamUsed = 0;
+
+    // Access tracker (LRU eviction)
+    static constexpr size_t MAX_RAM_USEAGE = 10ULL * 1024 * 1024 * 1024; // 10 GB
+    static inline std::list<unsigned long long> accessList; // <contractIndex | chunkIndex>
+    static inline std::unordered_map<unsigned long long, std::list<unsigned long long>::iterator> accessMap; // tracker if <contractIndex | chunkIndex> is in accessList
+
     // IO related
     static constexpr size_t MAX_IO_NAME_LEN = 128;
-    static inline constexpr CHAR16 BASE_DIR[] = L"contract_states/";
+    static constexpr CHAR16 BASE_DIR[] = L"contract_states/";
+    static inline std::unordered_map<unsigned int, std::mutex> ioLocks;
 
     // Lazy loading related
     static inline std::vector<ContractStateEngine*> allEngines;
@@ -242,13 +250,19 @@ class ContractStateEngine : public K12Engine
     unsigned int contractIndex;
     bool isUffdRegistered = false;
 
+    std::vector<bool> isChunkLoadedInMemoryMap;
+    unsigned char tmpBuffer[K12_chunkSize];
+
 public:
     static void* allocateState(size_t size) {
         size = alignToPageSize(size);
+        int fd = memfd_create("qlite", MFD_CLOEXEC);
+        if (fd == -1) throw std::bad_alloc();
         void* buf = mmap(nullptr, size, PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                         MAP_SHARED, fd, 0);
         if (buf == MAP_FAILED) throw std::bad_alloc();
         memset(buf, 0, size);
+        close(fd);
         return buf;
     }
 
@@ -279,6 +293,39 @@ public:
         return nullptr;
     }
 
+    static void updateAccessTracker(unsigned int contractIndex, unsigned int chunkIndex) {
+        unsigned long long key = ((unsigned long long)contractIndex << 32) | chunkIndex;
+        auto it = accessMap.find(key);
+        if (it != accessMap.end()) {
+            // already in access list, move to the front
+            accessList.splice(accessList.begin(), accessList, it->second);
+        } else {
+            // not in access list, add to the front and record in map
+            accessList.push_front(key);
+            accessMap[key] = accessList.begin();
+        }
+    }
+
+    static size_t tryEvictChunks(size_t requiredSize = 0) {
+        size_t freedSize = 0;
+        while (totalRamUsed + requiredSize > MAX_RAM_USEAGE && !accessList.empty()) {
+            unsigned long long key = accessList.back();
+            accessList.pop_back();
+            accessMap.erase(key);
+
+            unsigned int contractIndex = (unsigned int)(key >> 32);
+            unsigned int chunkIndex = (unsigned int)(key & 0xFFFFFFFF);
+
+            ContractStateEngine* engine = getEngine(contractIndex);
+            if (engine && engine->isChunkLoadedInMemoryMap[chunkIndex]) {
+                if (engine->saveChunkToDisk(chunkIndex)) {
+                    freedSize += K12_chunkSize;
+                }
+            }
+        }
+        return freedSize;
+    }
+
     ContractStateEngine(unsigned char **state, size_t stateSize, unsigned int contractIndex)
         : K12Engine((unsigned char*)allocateState(stateSize), stateSize)
     {
@@ -286,11 +333,18 @@ public:
         this->contractIndex = contractIndex;
         this->nonPaddedSize = stateSize;
         this->paddedSize = alignToPageSize(stateSize);
+        this->isChunkLoadedInMemoryMap.resize(maxChunks);
+        for (unsigned int i = 0; i < maxChunks; i++)
+        {
+            isChunkLoadedInMemoryMap[i] = true; // memset in allocateState so all pages are in memory
+        }
 
         // ensure data pages directory exists
         CHAR16 dir[MAX_IO_NAME_LEN] = {};
         getDirectory(dir);
         createDir(dir);
+
+        totalRamUsed += paddedSize;
     }
 
     void getDirectory(CHAR16 outDirectory[MAX_IO_NAME_LEN])
@@ -325,6 +379,95 @@ public:
         setMem(pageName + 10, 8, 0);
     }
 
+    bool loadChunkFromDisk(unsigned int chunkIndex, unsigned char *destBuffer, size_t chunkSize)
+    {
+        // lock IO for this contract
+        std::lock_guard<std::mutex> lock(ioLocks[contractIndex]);
+
+        CHAR16 dir[MAX_IO_NAME_LEN] = {};
+        getDirectory(dir);
+
+        CHAR16 pageId[MAX_IO_NAME_LEN] = {};
+        getPageId(pageId, chunkIndex);
+
+        long long fileSize = getFileSize(pageId, dir);
+        if (fileSize != K12_chunkSize && !(chunkIndex == maxChunks - 1 && fileSize == (nonPaddedSize % K12_chunkSize)))
+        {
+            // file does not exist or size mismatch
+            std::cout << "Contract " << contractIndex << ": Chunk " << chunkIndex
+                      << " file size mismatch or does not exist. Expected size: "
+                      << ((chunkIndex == maxChunks - 1) ? (nonPaddedSize % K12_chunkSize) : K12_chunkSize)
+                      << ", actual size: " << fileSize << "\n";
+            return false;
+        }
+
+        if (fileSize != chunkSize)
+        {
+            std::cout << "Contract " << contractIndex << ": Chunk " << chunkIndex
+                      << " requested size mismatch. Requested size: "
+                      << chunkSize << ", actual size: " << fileSize << "\n";
+            return false;
+        }
+
+        auto readSize = load(pageId, fileSize, destBuffer, dir);
+        isChunkLoadedInMemoryMap[chunkIndex] = true;
+
+        totalRamUsed += chunkSize;
+
+        return readSize == fileSize;
+    }
+
+    bool saveChunkToDisk(unsigned int chunkIndex)
+    {
+        std::lock_guard<std::mutex> lock(ioLocks[contractIndex]);
+
+        CHAR16 dir[MAX_IO_NAME_LEN] = {};
+        getDirectory(dir);
+
+        CHAR16 pageId[MAX_IO_NAME_LEN] = {};
+        getPageId(pageId, chunkIndex);
+
+        size_t offset = chunkIndex * (size_t)K12_chunkSize;
+        size_t chunkSize = K12_chunkSize;
+        if (paddedSize % K12_chunkSize != 0 && chunkIndex == maxChunks - 1)
+        {
+            chunkSize = paddedSize % K12_chunkSize;
+        }
+
+        auto writeSize = save(pageId, chunkSize, _state + offset, dir);
+        isChunkLoadedInMemoryMap[chunkIndex] = false;
+
+        bool success = writeSize == chunkSize;
+        // release the memory of the chunk (but keep the page mapped)
+        if (madvise(_state + offset, chunkSize, MADV_REMOVE) == -1)
+        {
+            std::cout << "Contract " << contractIndex << ": madvise failed for chunk " << chunkIndex << "\n";
+            success = false;
+        }
+
+        totalRamUsed -= chunkSize;
+
+        return success;
+    }
+
+    bool flushAllChunksToDisk(bool needToBeChanged = true)
+    {
+        bool allOk = true;
+        for (unsigned int i = 0; i < maxChunks; i++)
+        {
+            if ((!needToBeChanged || isChunkChangedMap[i]) && isChunkLoadedInMemoryMap[i])
+            {
+                bool ok = saveChunkToDisk(i);
+                if (!ok)
+                {
+                    std::cout << "Contract " << contractIndex << ": Failed to save chunk " << i << " to disk\n";
+                    allOk = false;
+                }
+            }
+        }
+        return allOk;
+    }
+
     void registerUserFaultFD()
     {
         if (isUffdRegistered) return;
@@ -333,7 +476,7 @@ public:
         uffdio_register reg{};
         reg.range.start = (uint64_t)_state;
         reg.range.len = paddedSize;
-        reg.mode = UFFDIO_REGISTER_MODE_WP | UFFDIO_REGISTER_MODE_MISSING;
+        reg.mode = UFFDIO_REGISTER_MODE_WP | UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_MINOR;
 
         if (ioctl(uffd.get(), UFFDIO_REGISTER, &reg) == -1)
             throw std::runtime_error("UFFDIO_REGISTER failed");
@@ -341,7 +484,7 @@ public:
         isUffdRegistered = true;
 
         // write-protect whole region
-        reprotectRegion();
+        reprotectWriteRegion();
 
         std::thread handler([=]()
             {
@@ -358,7 +501,7 @@ public:
                     auto flags = msg.arg.pagefault.flags;
 
                     bool is_wp = flags & UFFD_PAGEFAULT_FLAG_WP;
-                    bool is_minor = flags & UFFD_PAGEFAULT_FLAG_MINOR;
+                    bool is_minor = flags & UFFD_PAGEFAULT_FLAG_MINOR; // aka read in our case
 
                     // If neither is set → MISSING
                     bool is_missing = !is_wp && !is_minor;
@@ -372,9 +515,11 @@ public:
                     size_t startRange = (size_t)_state + (chunkIndex * (size_t)K12_chunkSize);
                     // if there is only 1 page left (system memory page) then just need to cover to the last system page (cover full K12 chunk will go beyond the state size)
                     size_t lenRange = std::min(paddedSize - (chunkIndex * (size_t)K12_chunkSize), (size_t)K12_chunkSize);
+
                     // handle write-protect page fault
                     if (is_wp)
                     {
+                        updateAccessTracker(contractIndex, chunkIndex);
                         markChunkChanged(chunkIndex);
                         printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
                                contractIndex, (unsigned long long)accessAddress, chunkIndex);
@@ -394,30 +539,67 @@ public:
                     // handle missing page fault
                     if (is_missing)
                     {
-                        uffdio_zeropage zp{};
-                        zp.range.start = pageAddress;
-                        zp.range.len = page_size;
+                        bool loadOk = false;
+                        do {
+                            loadOk = loadChunkFromDisk(chunkIndex, tmpBuffer, lenRange);
+                            if (!loadOk)
+                            {
+                                std::cout << "Critical error: Contract " << contractIndex
+                                         << ": Failed to load chunk " << chunkIndex
+                                         << " from disk. Retrying in 1 second...\n";
+                               std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                            }
+                        } while (!loadOk);
 
-                        printf("Page missing at address 0x%llx, zeroing page\n",
-                               (unsigned long long)accessAddress);
-
-                        if (ioctl(uffd.get(), UFFDIO_ZEROPAGE, &zp) == -1)
+                        // copy data into the page
+                        uffdio_copy uc{};
+                        uc.src = (uint64_t)tmpBuffer;
+                        uc.dst = startRange;
+                        uc.len = lenRange;
+                        uc.mode = 0;
+                        if (ioctl(uffd.get(), UFFDIO_COPY, &uc) == -1)
                         {
-                            std::cout << "Contract " << contractIndex << ": UFFDIO_ZEROPAGE failed\n";
+                            std::cout << "Contract " << contractIndex << ": UFFDIO_COPY failed\n";
                         }
+                        if (uc.copy != uc.len)
+                        {
+                            std::cout << "Contract " << contractIndex << ": UFFDIO_COPY incomplete copy\n";
+                        }
+                    }
+
+                    // handle minor page fault (read)
+                    if (is_minor)
+                    {
+                        updateAccessTracker(contractIndex, chunkIndex);
+                        // resume execution
+                        uffdio_continue ucont{};
+                        ucont.range.start = startRange;
+                        ucont.range.len = lenRange;
+                        ucont.mode = 0;
+                        if (ioctl(uffd.get(), UFFDIO_CONTINUE, &ucont) == -1)
+                        {
+                            std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed\n";
+                        }
+                        // reprotect read again to track next read
+                        reprotectReadRegion((chunkIndex * (size_t)K12_chunkSize), lenRange);
                     }
                 }
             });
         handler.detach();
     }
 
-    void reprotectRegion() {
+    void reprotectWriteRegion(size_t startOffset = 0, size_t len = 0) {
         if (!isUffdRegistered) return;
+
+        if (len == 0 && startOffset == 0)
+        {
+            len = paddedSize;
+        }
 
         uffdio_writeprotect wp {};
 
-        wp.range.start = (uint64_t)_state;
-        wp.range.len   = paddedSize;
+        wp.range.start = (uint64_t)_state + startOffset;
+        wp.range.len   = len;
 
         // UFFDIO_WRITEPROTECT_MODE_WP: Sets the write-protect bit
         // (If you set mode to 0, it removes protection)
@@ -434,10 +616,22 @@ public:
         }
     }
 
+    void reprotectReadRegion(size_t startOffset = 0, size_t len = 0)
+    {
+        if (!isUffdRegistered) return;
+
+        if (len == 0 && startOffset == 0)
+        {
+            len = paddedSize;
+        }
+
+        madvise(_state + startOffset, len, MADV_DONTNEED); // remove only PTE mappings, all our data still safe. next read will trigger minor fault
+    }
+
     int getHashAndReprotect(unsigned char* output, size_t outputByteLen)
     {
         int res = getHash(output, outputByteLen);
-        reprotectRegion();
+        reprotectWriteRegion();
         return res;
     }
 };
