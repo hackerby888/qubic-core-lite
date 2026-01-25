@@ -369,7 +369,7 @@ public:
                     size_t offset = accessAddress - (size_t)_state;
                     unsigned int chunkIndex = offset / K12_chunkSize;
 
-                    auto startRange = (size_t)_state + (chunkIndex * (size_t)K12_chunkSize);
+                    size_t startRange = (size_t)_state + (chunkIndex * (size_t)K12_chunkSize);
                     // if there is only 1 page left (system memory page) then just need to cover to the last system page (cover full K12 chunk will go beyond the state size)
                     size_t lenRange = std::min(paddedSize - (chunkIndex * (size_t)K12_chunkSize), (size_t)K12_chunkSize);
                     // handle write-protect page fault
