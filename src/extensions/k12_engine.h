@@ -366,22 +366,29 @@ public:
                     auto accessAddress = msg.arg.pagefault.address;
                     auto pageAddress = msg.arg.pagefault.address & ~(page_size - 1);
 
+                    size_t offset = accessAddress - (uint64_t)_state;
+                    unsigned int chunkIndex = offset / K12_chunkSize;
+
+                    auto startRange = (uint64_t)_state + (chunkIndex * K12_chunkSize);
+                    // if there is only 1 page left (system memory page) then just need to cover to the last system page (cover full K12 chunk will go beyond the state size)
+                    size_t lenRange = std::min(paddedSize - (chunkIndex * K12_chunkSize), (size_t)K12_chunkSize);
                     // handle write-protect page fault
                     if (is_wp)
                     {
-                        size_t offset = accessAddress - (uint64_t)_state;
-                        unsigned int chunkIndex = offset / K12_chunkSize;
                         markChunkChanged(chunkIndex);
                         printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
                                contractIndex, (unsigned long long)accessAddress, chunkIndex);
 
                         // remove write-protect so write can continue
                         uffdio_writeprotect uwp{};
-                        uwp.range.start = pageAddress;
-                        uwp.range.len = page_size;
+                        uwp.range.start = startRange;
+                        uwp.range.len = lenRange;
                         uwp.mode = 0;
 
-                        ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &uwp);
+                        if (ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &uwp) == -1)
+                        {
+                            std::cout << "Contract " << contractIndex << ": UFFDIO_WRITEPROTECT remove failed\n";
+                        }
                     }
 
                     // handle missing page fault
@@ -394,7 +401,10 @@ public:
                         printf("Page missing at address 0x%llx, zeroing page\n",
                                (unsigned long long)accessAddress);
 
-                        ioctl(uffd.get(), UFFDIO_ZEROPAGE, &zp);
+                        if (ioctl(uffd.get(), UFFDIO_ZEROPAGE, &zp) == -1)
+                        {
+                            std::cout << "Contract " << contractIndex << ": UFFDIO_ZEROPAGE failed\n";
+                        }
                     }
                 }
             });
