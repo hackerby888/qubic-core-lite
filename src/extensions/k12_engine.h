@@ -2,8 +2,8 @@
 
 #define _GNU_SOURCE
 #include "contract_core/contract_def.h"
-
 #include <K12/kangaroo_twelve_xkcp.h>
+#include "extensions/utils.h"
 #include <cstddef>
 #include <fcntl.h>
 #include <cstring>
@@ -19,33 +19,7 @@
 #include <vector>
 #include <unordered_map>
 #include <list>
-
-#define SYSTEM_PAGE_SIZE sysconf(_SC_PAGESIZE)
-
-static size_t alignToPageSize(size_t address)
-{
-    size_t page_size = SYSTEM_PAGE_SIZE;
-    return (address + page_size - 1) & ~(page_size - 1);
-}
-
-class UserFaultFD {
-public:
-    UserFaultFD() {
-        fd = syscall(SYS_userfaultfd, O_NONBLOCK);
-        if (fd < 0) throw std::runtime_error("userfaultfd failed");
-
-        uffdio_api api{ .api = UFFD_API };
-        if (ioctl(fd, UFFDIO_API, &api) == -1)
-            throw std::runtime_error("UFFDIO_API failed");
-    }
-
-    ~UserFaultFD() { if (fd >= 0) close(fd); }
-
-    int get() const { return fd; }
-
-private:
-    int fd;
-};
+#include "userfaultfd.h"
 
 class K12Engine
 {
@@ -358,38 +332,6 @@ public:
         createDir(dir);
     }
 
-    void getDirectory(CHAR16 outDirectory[MAX_IO_NAME_LEN])
-    {
-        CHAR16 contractAssetName[MAX_IO_NAME_LEN] = {};
-        string_to_wchar_t(contractDescriptions[contractIndex].assetName, contractAssetName);
-
-        setText(outDirectory, BASE_DIR);
-        if (contractIndex != 0)
-        {
-            appendText(outDirectory, contractAssetName);
-        } else
-        {
-            appendText(outDirectory, "Contract0State");
-        }
-    }
-
-    void getPageId(CHAR16 pageName[MAX_IO_NAME_LEN], unsigned int chunkIndex)
-    {
-        struct
-        {
-            unsigned int contractIndex;
-            unsigned int chunkIndex;
-        } pageIdStruct;
-
-        pageIdStruct.contractIndex = contractIndex;
-        pageIdStruct.chunkIndex = chunkIndex;
-
-        m256i digest{};
-        KangarooTwelve(&pageIdStruct, sizeof(pageIdStruct), digest.m256i_u8, sizeof(digest));
-        getIdentity(digest.m256i_u8, pageName, true);
-        setMem(pageName + 10, 8, 0);
-    }
-
     bool loadChunkFromDisk(unsigned int chunkIndex, unsigned char *destBuffer, size_t chunkSize)
     {
         // lock IO for this contract
@@ -402,12 +344,12 @@ public:
         getPageId(pageId, chunkIndex);
 
         long long fileSize = getFileSize(pageId, dir);
-        if (fileSize != K12_chunkSize && !(chunkIndex == maxChunks - 1 && fileSize == (nonPaddedSize % K12_chunkSize)))
+        if (fileSize != K12_chunkSize && !(chunkIndex == maxChunks - 1 && fileSize == (paddedSize % K12_chunkSize)))
         {
             // file does not exist or size mismatch
             std::cout << "Contract " << contractIndex << ": Chunk " << chunkIndex
                       << " file size mismatch or does not exist. Expected size: "
-                      << ((chunkIndex == maxChunks - 1) ? (nonPaddedSize % K12_chunkSize) : K12_chunkSize)
+                      << ((chunkIndex == maxChunks - 1) ? (paddedSize % K12_chunkSize) : K12_chunkSize)
                       << ", actual size: " << fileSize << "\n";
             return false;
         }
@@ -560,6 +502,8 @@ public:
                                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                                 }
                             } while (!loadOk);
+                            printf("Loaded chunk %u for contract %u from disk\n",
+                                   chunkIndex, contractIndex);
 
                             // copy data into the page
                             uffdio_copy uc{};
@@ -670,4 +614,38 @@ public:
         reprotectReadRegion();
         return res;
     }
+
+private:
+    void getDirectory(CHAR16 outDirectory[MAX_IO_NAME_LEN])
+    {
+        CHAR16 contractAssetName[MAX_IO_NAME_LEN] = {};
+        string_to_wchar_t(contractDescriptions[contractIndex].assetName, contractAssetName);
+
+        setText(outDirectory, BASE_DIR);
+        if (contractIndex != 0)
+        {
+            appendText(outDirectory, contractAssetName);
+        } else
+        {
+            appendText(outDirectory, "Contract0State");
+        }
+    }
+
+    void getPageId(CHAR16 pageName[MAX_IO_NAME_LEN], unsigned int chunkIndex)
+    {
+        struct
+        {
+            unsigned int contractIndex;
+            unsigned int chunkIndex;
+        } pageIdStruct;
+
+        pageIdStruct.contractIndex = contractIndex;
+        pageIdStruct.chunkIndex = chunkIndex;
+
+        m256i digest{};
+        KangarooTwelve(&pageIdStruct, sizeof(pageIdStruct), digest.m256i_u8, sizeof(digest));
+        getIdentity(digest.m256i_u8, pageName, true);
+        setMem(pageName + 10, 8, 0);
+    }
+
 };

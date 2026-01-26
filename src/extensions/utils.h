@@ -8,10 +8,14 @@
 #include <sstream>
 #include <stdarg.h>
 #include <vector>
+#include <unistd.h>
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4996)
 #endif
+
+#define SYSTEM_PAGE_SIZE sysconf(_SC_PAGESIZE)
+
 static std::string wchar_to_string(const wchar_t* wstr) {
     if (!wstr)
     {
@@ -188,6 +192,12 @@ static inline std::vector<uint8_t> base64_decode(const std::string &in) {
     }
 
     return out;
+}
+
+static size_t alignToPageSize(size_t address)
+{
+    size_t page_size = SYSTEM_PAGE_SIZE;
+    return (address + page_size - 1) & ~(page_size - 1);
 }
 
 #define _bswap_32(x) (x)

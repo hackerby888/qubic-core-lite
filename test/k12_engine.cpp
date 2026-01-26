@@ -96,7 +96,7 @@ TEST(K12EngineTest, ContractEngineTest)
         }
        *((size_t*)(contractBuffer + i)) = i;
     }
-    *((size_t*)(contractBuffer + engine->getMaxChunks() * K12_chunkSize)) = engine->getMaxChunks() * K12_chunkSize;
+    *((size_t*)(contractBuffer + (engine->getMaxChunks()-1) * K12_chunkSize)) = (engine->getMaxChunks()-1) * K12_chunkSize;
 
     m256i hash1;
     engine->getHash(hash1.m256i_u8, 32);
@@ -144,6 +144,8 @@ TEST(K12EngineTest, ContractEngineTest)
     EXPECT_EQ(engine->getTotalMemoryInRam(), 0);
     EXPECT_EQ(engine->getMaxChunks(), (contractSize + K12_chunkSize - 1) / K12_chunkSize);
 
-    val = *((size_t*)(contractBuffer + engine->getMaxChunks() * K12_chunkSize));
-    EXPECT_EQ(val, engine->getMaxChunks() * K12_chunkSize);
+    engine->reprotectWriteRegion();
+    *((size_t*)(contractBuffer + (engine->getMaxChunks()-1) * K12_chunkSize)) = 0;
+    val = *((size_t*)(contractBuffer + (engine->getMaxChunks()-1) * K12_chunkSize));
+    EXPECT_EQ(val, 0);
 }
