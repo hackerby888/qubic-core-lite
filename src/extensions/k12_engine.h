@@ -229,14 +229,14 @@ public:
     static void* allocateState(size_t size) {
         size = alignToPageSize(size);
         int fd = memfd_create("qlite", MFD_CLOEXEC);
-        if (fd == -1) throw std::bad_alloc();
+        if (fd == -1) throw std::runtime_error("Error: memfd_create failed | Line: " + std::to_string(__LINE__));
         if (ftruncate(fd, size) == -1) {
             close(fd);
-            throw std::bad_alloc();
+            throw std::runtime_error("Error: ftruncate failed | Line: " + std::to_string(__LINE__));
         }
         void* buf = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                          MAP_SHARED, fd, 0);
-        if (buf == MAP_FAILED) throw std::bad_alloc();
+        if (buf == MAP_FAILED) throw std::runtime_error("Error: mmap failed | Line: " + std::to_string(__LINE__));
         memset(buf, 0, size);
         close(fd);
         return buf;
@@ -431,7 +431,7 @@ public:
         reg.mode = UFFDIO_REGISTER_MODE_WP | UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_MINOR;
 
         if (ioctl(uffd.get(), UFFDIO_REGISTER, &reg) == -1)
-            throw std::runtime_error("UFFDIO_REGISTER failed");
+            throw std::runtime_error("Error: UFFDIO_REGISTER ioctl failed for contract " + std::to_string(contractIndex));
 
         isUffdRegistered = true;
 
