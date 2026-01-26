@@ -14,10 +14,10 @@ jobs:
       configuration: "Release"
       build_dir: "build"
 
-  build-windows:
-    uses: ./.github/workflows/windows-build.yml
-    with:
-      configuration: "Release"
+#  build-windows:
+#    uses: ./.github/workflows/windows-build.yml
+#    with:
+#      configuration: "Release"
 
   publish-linux:
     needs: build-linux
@@ -38,19 +38,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-windows:
-    needs: build-windows
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Windows build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: QubicLiteWindowsBuild-${{ env.BUILD_CONFIGURATION }}
-          path: ${{ env.RELEASE_BUILD_DIR }}
-
-      - name: Create Windows release package
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.RELEASE_BUILD_DIR }}/**/x64/Release/Qubic.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#  publish-windows:
+#    needs: build-windows
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Download Windows build artifact
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: QubicLiteWindowsBuild-${{ env.BUILD_CONFIGURATION }}
+#          path: ${{ env.RELEASE_BUILD_DIR }}
+#
+#      - name: Create Windows release package
+#        uses: softprops/action-gh-release@v2
+#        with:
+#          files: ${{ env.RELEASE_BUILD_DIR }}/**/x64/Release/Qubic.exe
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
