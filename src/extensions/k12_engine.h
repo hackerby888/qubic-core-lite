@@ -5,7 +5,7 @@
 
 #include <K12/kangaroo_twelve_xkcp.h>
 #include <cstddef>
-#include <cstdint>
+#include <fcntl.h>
 #include <cstring>
 #include <iostream>
 #include <linux/userfaultfd.h>
@@ -229,9 +229,7 @@ public:
 // linux userfaultfd integration into K12Engine
 class ContractStateEngine : public K12Engine
 {
-    // Global stat
-    static inline size_t totalRamUsed = 0;
-
+public:
     // Access tracker (LRU eviction)
     static constexpr size_t MAX_RAM_USEAGE = 10ULL * 1024 * 1024 * 1024; // 10 GB
     static inline std::list<unsigned long long> accessList; // <contractIndex | chunkIndex>
@@ -254,11 +252,14 @@ class ContractStateEngine : public K12Engine
     std::vector<bool> isChunkLoadedInMemoryMap;
     unsigned char tmpBuffer[K12_chunkSize];
 
-public:
     static void* allocateState(size_t size) {
         size = alignToPageSize(size);
         int fd = memfd_create("qlite", MFD_CLOEXEC);
         if (fd == -1) throw std::bad_alloc();
+        if (ftruncate(fd, size) == -1) {
+            close(fd);
+            throw std::bad_alloc();
+        }
         void* buf = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                          MAP_SHARED, fd, 0);
         if (buf == MAP_FAILED) throw std::bad_alloc();
@@ -307,9 +308,20 @@ public:
         }
     }
 
+    static size_t getRamUsageByAllEngines()
+    {
+        size_t usage = 0;
+        for (auto engine : allEngines) {
+            if (engine) {
+                usage += engine->getTotalMemoryInRam();
+            }
+        }
+        return usage;
+    }
+
     static size_t tryEvictChunks(size_t requiredSize = 0) {
         size_t freedSize = 0;
-        while (totalRamUsed + requiredSize > MAX_RAM_USEAGE && !accessList.empty()) {
+        while (getRamUsageByAllEngines() + requiredSize > MAX_RAM_USEAGE && !accessList.empty()) {
             unsigned long long key = accessList.back();
             accessList.pop_back();
             accessMap.erase(key);
@@ -344,8 +356,6 @@ public:
         CHAR16 dir[MAX_IO_NAME_LEN] = {};
         getDirectory(dir);
         createDir(dir);
-
-        totalRamUsed += paddedSize;
     }
 
     void getDirectory(CHAR16 outDirectory[MAX_IO_NAME_LEN])
@@ -365,13 +375,13 @@ public:
 
     void getPageId(CHAR16 pageName[MAX_IO_NAME_LEN], unsigned int chunkIndex)
     {
-        const ContractDescription *desc = &contractDescriptions[contractIndex];
         struct
         {
-            ContractDescription desc;
+            unsigned int contractIndex;
             unsigned int chunkIndex;
         } pageIdStruct;
-        std::memcpy(&pageIdStruct.desc, desc, sizeof(ContractDescription));
+
+        pageIdStruct.contractIndex = contractIndex;
         pageIdStruct.chunkIndex = chunkIndex;
 
         m256i digest{};
@@ -413,8 +423,6 @@ public:
         auto readSize = load(pageId, fileSize, destBuffer, dir);
         isChunkLoadedInMemoryMap[chunkIndex] = true;
 
-        totalRamUsed += chunkSize;
-
         return readSize == fileSize;
     }
 
@@ -446,12 +454,10 @@ public:
             success = false;
         }
 
-        totalRamUsed -= chunkSize;
-
         return success;
     }
 
-    bool flushAllChunksToDisk(bool needToBeChanged = true)
+    bool flushAllChunksToDisk(bool needToBeChanged = false)
     {
         bool allOk = true;
         for (unsigned int i = 0; i < maxChunks; i++)
@@ -575,6 +581,8 @@ public:
                         if (is_minor)
                         {
                             updateAccessTracker(contractIndex, chunkIndex);
+                            printf("Found minor page fault at address 0x%llx, chunk %u\n",
+                                   (unsigned long long)accessAddress, chunkIndex);
                             // resume execution
                             uffdio_continue ucont{};
                             ucont.range.start = startRange;
@@ -589,6 +597,26 @@ public:
                 }
             });
         handler.detach();
+    }
+
+    size_t getTotalMemoryInRam()
+    {
+        size_t totalRam = 0;
+        for (unsigned int i = 0; i < maxChunks; i++)
+        {
+            if (isChunkLoadedInMemoryMap[i])
+            {
+                if (paddedSize % K12_chunkSize != 0 && i == maxChunks - 1)
+                {
+                    totalRam += paddedSize % K12_chunkSize;
+                }
+                else
+                {
+                    totalRam += K12_chunkSize;
+                }
+            }
+        }
+        return totalRam;
     }
 
     void reprotectWriteRegion(size_t startOffset = 0, size_t len = 0) {
