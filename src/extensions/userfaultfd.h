@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef UFFDIO_CONTINUE_MODE_WP
-#define UFFDIO_CONTINUE_MODE_WP (static_cast<std::uint64_t>(1) << 0)
+#define UFFDIO_CONTINUE_MODE_WP ((__u64)1<<1)
 #endif
 
 class UserFaultFD {
