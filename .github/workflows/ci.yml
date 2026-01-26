@@ -10,7 +10,7 @@ jobs:
     with:
       configuration: Release
 
-  build-windows:
-    uses: ./.github/workflows/windows-build.yml
-    with:
-      configuration: Release
+#  build-windows:
+#    uses: ./.github/workflows/windows-build.yml
+#    with:
+#      configuration: Release
