@@ -40,7 +40,7 @@ protected:
     unsigned char *_lastOutput;
     size_t _lastOutputSize;
 
-    int _KangarooTwelve_Update(XKCP::KangarooTwelve_Instance *ktInstance, const unsigned char *input, size_t inputByteLen)
+    int _KangarooTwelve_Update(XKCP::KangarooTwelve_Instance *ktInstance, const unsigned char *input, size_t inputByteLen, bool useCache)
     {
         if (ktInstance->phase != XKCP::ABSORBING)
             return 1;
@@ -90,7 +90,7 @@ protected:
             unsigned int len = (inputByteLen < K12_chunkSize) ? (unsigned int)inputByteLen : K12_chunkSize;
             unsigned int chunkIndex = ktInstance->blockNumber;
 
-            if (!isChunkChangedMap[chunkIndex])
+            if (!isChunkChangedMap[chunkIndex] && useCache)
             {
                 if (len == K12_chunkSize)
                 {
@@ -152,7 +152,7 @@ public:
         _lastOutputSize = 0;
     }
 
-    int getHash(unsigned char* output, size_t outputByteLen)
+    int getHash(unsigned char* output, size_t outputByteLen, bool useCache = true)
     {
         if (_lastOutput && outputByteLen == _lastOutputSize && isAllChunksUnchanged())
         {
@@ -166,7 +166,7 @@ public:
         if (outputByteLen == 0)
             return 1;
         XKCP::KangarooTwelve_Initialize(&ktInstance, 128, outputByteLen);
-        if (_KangarooTwelve_Update(&ktInstance, _state, _stateSize) != 0)
+        if (_KangarooTwelve_Update(&ktInstance, _state, _stateSize, useCache) != 0)
             return 1;
         int ok =  XKCP::KangarooTwelve_Final(&ktInstance, output, nullptr, 0);
 
@@ -432,9 +432,6 @@ public:
 
         isUffdRegistered = true;
 
-        // write-protect whole region
-        reprotectWriteRegion();
-
         std::thread handler([=]()
             {
                 size_t page_size = SYSTEM_PAGE_SIZE;
@@ -510,7 +507,7 @@ public:
                             uc.src = (uint64_t)tmpBuffer;
                             uc.dst = startRange;
                             uc.len = lenRange;
-                            uc.mode = 0;
+                            uc.mode = UFFDIO_CONTINUE_MODE_WP;
                             if (ioctl(uffd.get(), UFFDIO_COPY, &uc) == -1)
                             {
                                 std::cout << "Contract " << contractIndex << ": UFFDIO_COPY failed\n";
@@ -525,13 +522,13 @@ public:
                         if (is_minor)
                         {
                             updateAccessTracker(contractIndex, chunkIndex);
-                            printf("Found minor page fault at address 0x%llx, chunk %u\n",
-                                   (unsigned long long)accessAddress, chunkIndex);
+                            // printf("Found minor page fault at contract %llu address 0x%llx, chunk %u\n", contractIndex,
+                            //        (unsigned long long)accessAddress, chunkIndex);
                             // resume execution
                             uffdio_continue ucont{};
                             ucont.range.start = startRange;
                             ucont.range.len = lenRange;
-                            ucont.mode = 0;
+                            ucont.mode = UFFDIO_CONTINUE_MODE_WP;
                             if (ioctl(uffd.get(), UFFDIO_CONTINUE, &ucont) == -1)
                             {
                                 std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed\n";

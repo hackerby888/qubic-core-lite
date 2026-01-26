@@ -6005,6 +6005,15 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                                     appendText(message, forceDontUseSecurityTick ? L"ON" : L"OFF");
                                     logToConsole(message);
                                 }
+
+                                size_t evictedBytes = ContractStateEngine::tryEvictChunks();
+                                if (evictedBytes > 0)
+                                {
+                                    setText(message, L"Evicted ");
+                                    appendNumber(message, evictedBytes / 1024, true);
+                                    appendText(message, L" KB of contract states from memory to disk.");
+                                    logToConsole(message);
+                                }
                             }
                         }
                     }
@@ -7604,7 +7613,28 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
     if (initialize())
     {
         logToConsole(L"Setting up contract engines ...");
-        ContractStateEngine::registerAllUserFaultFDs();
+        for (unsigned int contractIndex = 0; contractIndex < contractCount; contractIndex++)
+        {
+            auto engine = ContractStateEngine::getEngine(contractIndex);
+            if (engine)
+            {
+                engine->registerUserFaultFD();
+                engine->flushAllChunksToDisk();
+                engine->reprotectReadRegion();
+                engine->reprotectWriteRegion();
+                setText(message, L"Contract #");
+                appendNumber(message, contractIndex, false);
+                appendText(message, L" state engine set up.");
+                logToConsole(message);
+            } else
+            {
+                // This should never happen
+                setText(message, L"Failed to get contract state engine for contract #");;
+                appendNumber(message, contractIndex, false);
+                logToConsole(message);
+                exit(1);
+            }
+        }
         logToConsole(L"Setting up multiprocessing ...");
 
         #if !defined(NDEBUG)
@@ -8135,6 +8165,11 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                     }
                     tickerLoopNumerator = 0;
                     tickerLoopDenominator = 0;
+
+                    setText(message, L"Contracts state in memory = ");
+                    appendNumber(message, ContractStateEngine::getRamUsageByAllEngines() / 1024 / 1024, TRUE);
+                    appendText(message, L" MB.");
+                    logToConsole(message);
 
                     // output if misalignment happened
                     if (gTickTotalNumberOfComputors - gTickNumberOfComputors >= QUORUM && numberOfKnownNextTickTransactions == numberOfNextTickTransactions)
