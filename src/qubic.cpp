@@ -8179,6 +8179,9 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                     setText(message, L"Contracts state in memory = ");
                     appendNumber(message, ContractStateEngine::getRamUsageByAllEngines() / 1024 / 1024, TRUE);
                     appendText(message, L" MB.");
+                    appendText(message, L" | Max = ");
+                    appendNumber(message, ContractStateEngine::MAX_RAM_USEAGE / 1024 / 1024, TRUE);
+                    appendText(message, L" MB.");
                     logToConsole(message);
 
                     // output if misalignment happened
@@ -8390,6 +8393,7 @@ void processArgs(int argc, const char* argv[]) {
         ("hp, http-passcode", "Passcode to access http server", cxxopts::value<std::string>())
         ("o, operator", "Operator id", cxxopts::value<std::string>())
         ("op, operator-seed", "Lite node seed", cxxopts::value<std::string>())
+        ("max-sc-mem", "Max smart contract memory in MB", cxxopts::value<unsigned long long>()->default_value("10"))
         ("s,security-tick", "Core will verify state after x tick, to reduce computational to the node", cxxopts::value<int>()->default_value("1"));
     auto result = options.parse(argc, argv);
 
@@ -8436,6 +8440,11 @@ void processArgs(int argc, const char* argv[]) {
         mySubseed = subseed;
         myPublicKey = publicKey;
         logColorToScreen("INFO", "Lite node operator ID: " + myOperatorId + (!isOperatorIdProvided ? " (default)" : ""));
+    }
+
+    if (result.count("max-sc-mem")) {
+        unsigned long long maxScMem = result["max-sc-mem"].as<unsigned long long>();
+        ContractStateEngine::MAX_RAM_USEAGE = maxScMem * 1024 * 1024 * 1024;
     }
 
     if (result.count("threads")) {

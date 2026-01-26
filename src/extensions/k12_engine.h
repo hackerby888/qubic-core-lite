@@ -205,7 +205,7 @@ class ContractStateEngine : public K12Engine
 {
 public:
     // Access tracker (LRU eviction)
-    static constexpr size_t MAX_RAM_USEAGE = 10ULL * 1024 * 1024 * 1024; // 10 GB
+    static inline size_t MAX_RAM_USEAGE = 10ULL * 1024 * 1024 * 1024; // 10 GB
     static inline std::list<unsigned long long> accessList; // <contractIndex | chunkIndex>
     static inline std::unordered_map<unsigned long long, std::list<unsigned long long>::iterator> accessMap; // tracker if <contractIndex | chunkIndex> is in accessList
 
