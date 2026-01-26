@@ -6098,6 +6098,11 @@ static bool loadContractStateFiles(CHAR16* directory, bool forceLoadFromFile)
             }
             logToConsole(message);
         }
+
+        // backup k12 state and save to disk after load
+        m256i digest;
+        ContractStateEngine::getEngine(contractIndex)->getHash(digest.m256i_u8, sizeof(m256i));
+        ContractStateEngine::getEngine(contractIndex)->flushAllChunksToDisk();
     }
 
     logToConsole(L"All contract files successfully loaded or initialized.");
@@ -6144,6 +6149,13 @@ static bool saveContractStateFiles(CHAR16* directory)
         {
             return false;
         }
+
+        // after save() all chunks should be flushed to disk again (to leave room for next contracts)
+        ContractStateEngine::getEngine(contractIndex)->flushAllChunksToDisk();
+        setText(message, L" -> ");
+        appendText(message, CONTRACT_FILE_NAME);
+        appendText(message, L" saved successfully.");
+        logToConsole(message);
     }
 
     setNumber(message, totalSize, TRUE);
@@ -7618,8 +7630,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
             auto engine = ContractStateEngine::getEngine(contractIndex);
             if (engine)
             {
-                engine->registerUserFaultFD();
-                engine->flushAllChunksToDisk();
                 engine->reprotectReadRegion();
                 engine->reprotectWriteRegion();
                 setText(message, L"Contract #");

@@ -249,6 +249,9 @@ public:
         });
 
         auto engine = new ContractStateEngine(state, stateSize, contractIndex);
+        // register only won't do anything, need call protect or save chunk to disk to trigger the handler
+        engine->registerUserFaultFD();
+
         allEngines[contractIndex] = engine;
 
         return true;
@@ -644,5 +647,4 @@ private:
         getIdentity(digest.m256i_u8, pageName, true);
         setMem(pageName + 10, 8, 0);
     }
-
 };
