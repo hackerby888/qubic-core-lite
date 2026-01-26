@@ -249,6 +249,7 @@ class ContractStateEngine : public K12Engine
     size_t paddedSize;
     unsigned int contractIndex;
     bool isUffdRegistered = false;
+    std::mutex faultLock;
 
     std::vector<bool> isChunkLoadedInMemoryMap;
     unsigned char tmpBuffer[K12_chunkSize];
@@ -516,72 +517,74 @@ public:
                     // if there is only 1 page left (system memory page) then just need to cover to the last system page (cover full K12 chunk will go beyond the state size)
                     size_t lenRange = std::min(paddedSize - (chunkIndex * (size_t)K12_chunkSize), (size_t)K12_chunkSize);
 
-                    // handle write-protect page fault
-                    if (is_wp)
                     {
-                        updateAccessTracker(contractIndex, chunkIndex);
-                        markChunkChanged(chunkIndex);
-                        printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
-                               contractIndex, (unsigned long long)accessAddress, chunkIndex);
-
-                        // remove write-protect so write can continue
-                        uffdio_writeprotect uwp{};
-                        uwp.range.start = startRange;
-                        uwp.range.len = lenRange;
-                        uwp.mode = 0;
-
-                        if (ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &uwp) == -1)
+                        std::lock_guard<std::mutex> lock(faultLock);
+                        // handle write-protect page fault
+                        if (is_wp)
                         {
-                            std::cout << "Contract " << contractIndex << ": UFFDIO_WRITEPROTECT remove failed\n";
-                        }
-                    }
+                            updateAccessTracker(contractIndex, chunkIndex);
+                            markChunkChanged(chunkIndex);
+                            printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
+                                   contractIndex, (unsigned long long)accessAddress, chunkIndex);
 
-                    // handle missing page fault
-                    if (is_missing)
-                    {
-                        bool loadOk = false;
-                        do {
-                            loadOk = loadChunkFromDisk(chunkIndex, tmpBuffer, lenRange);
-                            if (!loadOk)
+                            // remove write-protect so write can continue
+                            uffdio_writeprotect uwp{};
+                            uwp.range.start = startRange;
+                            uwp.range.len = lenRange;
+                            uwp.mode = 0;
+
+                            if (ioctl(uffd.get(), UFFDIO_WRITEPROTECT, &uwp) == -1)
                             {
-                                std::cout << "Critical error: Contract " << contractIndex
-                                         << ": Failed to load chunk " << chunkIndex
-                                         << " from disk. Retrying in 1 second...\n";
-                               std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                std::cout << "Contract " << contractIndex << ": UFFDIO_WRITEPROTECT remove failed\n";
                             }
-                        } while (!loadOk);
+                        }
 
-                        // copy data into the page
-                        uffdio_copy uc{};
-                        uc.src = (uint64_t)tmpBuffer;
-                        uc.dst = startRange;
-                        uc.len = lenRange;
-                        uc.mode = 0;
-                        if (ioctl(uffd.get(), UFFDIO_COPY, &uc) == -1)
+                        // handle missing page fault
+                        if (is_missing)
                         {
-                            std::cout << "Contract " << contractIndex << ": UFFDIO_COPY failed\n";
-                        }
-                        if (uc.copy != uc.len)
-                        {
-                            std::cout << "Contract " << contractIndex << ": UFFDIO_COPY incomplete copy\n";
-                        }
-                    }
+                            bool loadOk = false;
+                            do
+                            {
+                                loadOk = loadChunkFromDisk(chunkIndex, tmpBuffer, lenRange);
+                                if (!loadOk)
+                                {
+                                    std::cout << "Critical error: Contract " << contractIndex
+                                              << ": Failed to load chunk " << chunkIndex
+                                              << " from disk. Retrying in 1 second...\n";
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                }
+                            } while (!loadOk);
 
-                    // handle minor page fault (read)
-                    if (is_minor)
-                    {
-                        updateAccessTracker(contractIndex, chunkIndex);
-                        // resume execution
-                        uffdio_continue ucont{};
-                        ucont.range.start = startRange;
-                        ucont.range.len = lenRange;
-                        ucont.mode = 0;
-                        if (ioctl(uffd.get(), UFFDIO_CONTINUE, &ucont) == -1)
-                        {
-                            std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed\n";
+                            // copy data into the page
+                            uffdio_copy uc{};
+                            uc.src = (uint64_t)tmpBuffer;
+                            uc.dst = startRange;
+                            uc.len = lenRange;
+                            uc.mode = 0;
+                            if (ioctl(uffd.get(), UFFDIO_COPY, &uc) == -1)
+                            {
+                                std::cout << "Contract " << contractIndex << ": UFFDIO_COPY failed\n";
+                            }
+                            if (uc.copy != uc.len)
+                            {
+                                std::cout << "Contract " << contractIndex << ": UFFDIO_COPY incomplete copy\n";
+                            }
                         }
-                        // reprotect read again to track next read
-                        reprotectReadRegion((chunkIndex * (size_t)K12_chunkSize), lenRange);
+
+                        // handle minor page fault (read)
+                        if (is_minor)
+                        {
+                            updateAccessTracker(contractIndex, chunkIndex);
+                            // resume execution
+                            uffdio_continue ucont{};
+                            ucont.range.start = startRange;
+                            ucont.range.len = lenRange;
+                            ucont.mode = 0;
+                            if (ioctl(uffd.get(), UFFDIO_CONTINUE, &ucont) == -1)
+                            {
+                                std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed\n";
+                            }
+                        }
                     }
                 }
             });
@@ -590,6 +593,8 @@ public:
 
     void reprotectWriteRegion(size_t startOffset = 0, size_t len = 0) {
         if (!isUffdRegistered) return;
+
+        std::lock_guard<std::mutex> lock(faultLock);
 
         if (len == 0 && startOffset == 0)
         {
@@ -620,6 +625,8 @@ public:
     {
         if (!isUffdRegistered) return;
 
+        std::lock_guard<std::mutex> lock(faultLock);
+
         if (len == 0 && startOffset == 0)
         {
             len = paddedSize;
@@ -632,6 +639,7 @@ public:
     {
         int res = getHash(output, outputByteLen);
         reprotectWriteRegion();
+        reprotectReadRegion();
         return res;
     }
 };
