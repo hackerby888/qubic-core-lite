@@ -1,4 +1,5 @@
 #define NO_UEFI
+#define LITE_ENGINE_DEBUG
 #define _GNU_SOURCE
 
 #include "platform/msvc_polyfill.h"

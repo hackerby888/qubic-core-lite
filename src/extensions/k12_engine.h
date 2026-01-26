@@ -472,8 +472,10 @@ public:
                         {
                             updateAccessTracker(contractIndex, chunkIndex);
                             markChunkChanged(chunkIndex);
+#ifdef LITE_ENGINE_DEBUG
                             printf("Contract %u: page fault at address 0x%llx, chunk %u marked changed\n",
                                    contractIndex, (unsigned long long)accessAddress, chunkIndex);
+#endif
 
                             // remove write-protect so write can continue
                             uffdio_writeprotect uwp{};
@@ -502,8 +504,10 @@ public:
                                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                                 }
                             } while (!loadOk);
+#ifdef LITE_ENGINE_DEBUG
                             printf("Loaded chunk %u for contract %u from disk\n",
                                    chunkIndex, contractIndex);
+#endif
 
                             // copy data into the page
                             uffdio_copy uc{};
@@ -525,8 +529,10 @@ public:
                         if (is_minor)
                         {
                             updateAccessTracker(contractIndex, chunkIndex);
-                            // printf("Found minor page fault at contract %llu address 0x%llx, chunk %u\n", contractIndex,
-                            //        (unsigned long long)accessAddress, chunkIndex);
+#ifdef LITE_ENGINE_DEBUG
+                            printf("Found minor page fault at contract %llu address 0x%llx, chunk %u\n", contractIndex,
+                                   (unsigned long long)accessAddress, chunkIndex);
+#endif
                             // resume execution
                             uffdio_continue ucont{};
                             ucont.range.start = startRange;
