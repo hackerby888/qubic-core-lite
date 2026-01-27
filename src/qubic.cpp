@@ -8320,6 +8320,7 @@ void processArgs(int argc, const char* argv[]) {
         ("hp, http-passcode", "Passcode to access http server", cxxopts::value<std::string>())
         ("o, operator", "Operator id", cxxopts::value<std::string>())
         ("op, operator-seed", "Lite node seed", cxxopts::value<std::string>())
+		("oa,operator-alias", "Operator alias for RPC tick-info", cxxopts::value<std::string>())
         ("s,security-tick", "Core will verify state after x tick, to reduce computational to the node", cxxopts::value<int>()->default_value("1"));
     auto result = options.parse(argc, argv);
 
@@ -8396,6 +8397,12 @@ void processArgs(int argc, const char* argv[]) {
     {
         rebuildTxHashmap = true;
     }
+
+	if (result.count("operator-alias"))
+    {
+        nodeAlias = result["operator-alias"].as<std::string>();
+		logColorToScreen("INFO", "Operator alias set to: " + nodeAlias);
+	}
 
     if (result.count("node-mode"))
     {
@@ -8586,6 +8593,7 @@ int main(int argc, const char* argv[]) {
     std::raise(SIGTERM);
     return status;
 }
+
 
 
 
