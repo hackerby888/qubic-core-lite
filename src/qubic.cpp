@@ -8245,7 +8245,7 @@ unsigned long long getTotalRam()
     totalRam += spectrumDigestsSizeInByte;
 
     // reorgBuffer
-    totalRam += reorgBufferSize;
+    totalRam += COMMON_BUFFERS_COUNT * defaultCommonBuffersSize;
 
     // assets & assetDigets & assetChangeFlags
     totalRam += ASSETS_CAPACITY * sizeof(AssetRecord);

@@ -128,7 +128,7 @@ struct QRP : ContractBase
 		}
 
 		qpi.getEntity(SELF, locals.entity);
-		locals.checkAmount = RL::max(locals.entity.incomingAmount - locals.entity.outgoingAmount, 0i64);
+		locals.checkAmount = RL::max(locals.entity.incomingAmount - locals.entity.outgoingAmount, 0LL);
 		if (locals.checkAmount == 0 || input.revenue > locals.checkAmount)
 		{
 			output.allocatedRevenue = 0;
@@ -171,7 +171,7 @@ struct QRP : ContractBase
 	PUBLIC_FUNCTION_WITH_LOCALS(GetAvailableReserve)
 	{
 		qpi.getEntity(SELF, locals.entity);
-		output.availableReserve = RL::max(locals.entity.incomingAmount - locals.entity.outgoingAmount, 0i64);
+		output.availableReserve = RL::max(locals.entity.incomingAmount - locals.entity.outgoingAmount, 0LL);
 	}
 
 	PUBLIC_FUNCTION_WITH_LOCALS(GetAllowedSC)
