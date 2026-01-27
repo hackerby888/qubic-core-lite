@@ -4,6 +4,7 @@ project(qubic_core CXX ASM_NASM)
 # GoogleTest requires at least C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 
 # Enable FetchContent module
 include(FetchContent)
