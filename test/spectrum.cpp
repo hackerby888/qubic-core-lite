@@ -4,6 +4,7 @@
 #define PRINT_TEST_INFO 0
 
 #include "gtest/gtest.h"
+#include "contract_testing.h"
 
 #include <chrono>
 #include <random>

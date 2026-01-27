@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __linux__
+#include "platform/msvc_polyfill.h"
+#endif
+
 #include "platform/global_var.h"
 #include "platform/memory_util.h"
 #include "platform/assert.h"
