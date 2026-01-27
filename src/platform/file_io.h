@@ -11,8 +11,9 @@
 #include <lib/platform_common/compiler_optimization.h>
 #include <lib/platform_efi/uefi.h>
 
-#include "console_logging.h"
 #include "concurrency.h"
+#include "console_logging.h"
+#include "extensions/zipper.h"
 #include "memory.h"
 
 // If you get an error reading and writing files, set the chunk sizes below to
@@ -74,7 +75,11 @@ static long long getFileSize(CHAR16* fileName, CHAR16* directory = NULL)
     std::string dirNameStr = wchar_to_string(directory);
     std::string fileNameStr = wchar_to_string(fileName);
     std::filesystem::path filePath;
-    filePath = dirNameStr + "/" + fileNameStr;
+    filePath = fileNameStr;
+    if (!dirNameStr.empty())
+    {
+        filePath = dirNameStr + "/" + fileNameStr;
+    }
 
     if (!std::filesystem::exists(filePath))
     {
@@ -318,7 +323,7 @@ static bool removeDir(CHAR16* dirName)
 #endif
 }
 
-static long long load(const CHAR16* fileName, unsigned long long totalSize, unsigned char* buffer, const CHAR16* directory = NULL)
+static long long load(const CHAR16* fileName, unsigned long long totalSize, unsigned char* buffer, const CHAR16* directory = NULL, bool useCompress = false)
 {
 #ifdef NO_UEFI
     FILE* file = nullptr;
@@ -335,7 +340,8 @@ static long long load(const CHAR16* fileName, unsigned long long totalSize, unsi
 #endif
         return -1;
     }
-    if (fread(buffer, 1, totalSize, file) != totalSize)
+    auto sizeShouldRead = getFileSize(const_cast<CHAR16*>(fileName), const_cast<CHAR16*>(directory));
+    if (fread(buffer, 1, sizeShouldRead, file) != sizeShouldRead)
     {
 #ifdef _MSC_VER
         wprintf(L"Error reading %llu bytes from %s!\n", totalSize, fileName);
@@ -344,6 +350,27 @@ static long long load(const CHAR16* fileName, unsigned long long totalSize, unsi
 #endif
         return -1;
     }
+
+    if (useCompress)
+    {
+        auto decompressedData = Zipper::unzip(buffer, sizeShouldRead);
+        if (decompressedData.size() != totalSize)
+        {
+            print_wstr(L"Error decompressing file %s, size mismatch! Expected %llu bytes, got %llu bytes.\n", wchar_to_string((fileName)).c_str(), sizeShouldRead, decompressedData.size());
+            fclose(file);
+            return -1;
+        }
+        copyMem(buffer, decompressedData.data(), totalSize);
+    } else
+    {
+        if (sizeShouldRead != totalSize)
+        {
+            print_wstr(L"Error reading file %s, size mismatch! Expected %llu bytes, got %llu bytes.\n", wchar_to_string((fileName)).c_str(), totalSize, sizeShouldRead);
+            fclose(file);
+            return -1;
+        }
+    }
+
     fclose(file);
     return totalSize;
 #else
@@ -409,9 +436,10 @@ static long long load(const CHAR16* fileName, unsigned long long totalSize, unsi
 #endif
 }
 
-static long long save(const CHAR16* fileName, unsigned long long totalSize, const unsigned char* buffer, const CHAR16* directory = NULL)
+static long long save(const CHAR16* fileName, unsigned long long totalSize, const unsigned char* buffer, const CHAR16* directory = NULL, bool useCompress = false)
 {
 #ifdef NO_UEFI
+    auto originalTotalSize = totalSize;
     FILE* file = nullptr;
     if (directory != NULL)
     {
@@ -426,6 +454,15 @@ static long long save(const CHAR16* fileName, unsigned long long totalSize, cons
 #endif
         return -1;
     }
+
+    std::vector<unsigned char> compressedData;
+    if (useCompress)
+    {
+        compressedData = Zipper::zip(const_cast<unsigned char *>(buffer), totalSize);
+        buffer = compressedData.data();
+        totalSize = compressedData.size();
+    }
+
     if (fwrite(buffer, 1, totalSize, file) != totalSize)
     {
 #ifdef _MSC_VER
@@ -436,7 +473,8 @@ static long long save(const CHAR16* fileName, unsigned long long totalSize, cons
         return -1;
     }
     fclose(file);
-    return totalSize;
+
+    return originalTotalSize;
 #else
     EFI_STATUS status;
     EFI_FILE_PROTOCOL* file = NULL;

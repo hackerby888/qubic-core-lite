@@ -12,6 +12,7 @@
 #include <locale>
 #include "extensions/utils.h"
 #include "platform/msvc_polyfill.h"
+#include "extensions/zipper.h"
 #endif
 
 ////////////////// USER CONFIGURABLE OPTIONS (default is for mainnet with swap feature) \\\\\\\\\\\\\\\\
@@ -6062,6 +6063,7 @@ static void contractProcessorShutdownCallback(EFI_EVENT Event, void* Context)
 static bool loadContractStateFiles(CHAR16* directory, bool forceLoadFromFile)
 {
     logToConsole(L"Loading contract files ...");
+    bool isLoadedFromSnapshot = directory != nullptr; // if directory is provided, we are loading from snapshot
     for (unsigned int contractIndex = 0; contractIndex < contractCount; contractIndex++)
     {
         CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 9] = contractIndex / 1000 + L'0';
@@ -6078,7 +6080,7 @@ static bool loadContractStateFiles(CHAR16* directory, bool forceLoadFromFile)
         }
         else
         {
-            long long loadedSize = load(CONTRACT_FILE_NAME, contractDescriptions[contractIndex].stateSize, contractStates[contractIndex], directory);
+            long long loadedSize = load(CONTRACT_FILE_NAME, contractDescriptions[contractIndex].stateSize, contractStates[contractIndex], directory, isLoadedFromSnapshot);
             setText(message, L" -> "); // set the message after loading otherwise `message` will contain potential messages from load()
             appendText(message, CONTRACT_FILE_NAME);
             if (loadedSize != contractDescriptions[contractIndex].stateSize)
@@ -6134,6 +6136,7 @@ static bool saveContractStateFiles(CHAR16* directory)
 
     unsigned long long totalSize = 0;
     long long savedSize = 0;
+    bool isLoadedFromSnapshot = directory != nullptr; // if directory is provided, we are loading from snapshot
 
     for (unsigned int contractIndex = 0; contractIndex < contractCount; contractIndex++)
     {
@@ -6142,7 +6145,7 @@ static bool saveContractStateFiles(CHAR16* directory)
         CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 7] = (contractIndex % 100) / 10 + L'0';
         CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 6] = contractIndex % 10 + L'0';
         contractStateLock[contractIndex].acquireRead();
-        savedSize = save(CONTRACT_FILE_NAME, contractDescriptions[contractIndex].stateSize, contractStates[contractIndex], directory);
+        savedSize = save(CONTRACT_FILE_NAME, contractDescriptions[contractIndex].stateSize, contractStates[contractIndex], directory, isLoadedFromSnapshot);
         contractStateLock[contractIndex].releaseRead();
         totalSize += savedSize;
         if (savedSize != contractDescriptions[contractIndex].stateSize)
@@ -8348,11 +8351,12 @@ unsigned long long getTotalRam()
     totalRam += ts.getTickTransactionsDigestPtrSize() / 10;
 #endif
 
+#ifdef ENABLED_LOGGING
     // logging size
     totalRam += qLogger::logBuffer.getVmStateSize();
     totalRam += qLogger::mapLogIdToBufferIndex.getVmStateSize();
     totalRam += qLogger::mapTxToLogId.getVmStateSize();
-
+#endif
 
     return totalRam;
 }

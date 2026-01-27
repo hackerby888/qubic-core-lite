@@ -35,8 +35,15 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/fmtlib/fmt.git
         GIT_TAG 12.1.0
 )
-
 FetchContent_MakeAvailable(fmt)
+
+FetchContent_Declare(
+        blosc2
+        GIT_REPOSITORY https://github.com/Blosc/c-blosc2.git
+        GIT_TAG        v2.15.1
+)
+FetchContent_MakeAvailable(blosc2)
+include_directories(${blosc2_SOURCE_DIR}/include)
 
 # Define the shared library (matches Visual Studio DynamicLibrary configuration)
 add_executable(
@@ -106,7 +113,7 @@ find_package(Threads REQUIRED)
   target_link_libraries(Qubic
     platform_common
     platform_efi
-    Threads::Threads drogon fmt::fmt
+    Threads::Threads drogon fmt::fmt Blosc2::blosc2_static
   )
 # endif()
 
