@@ -23,6 +23,7 @@ The lite version of Qubic Core that can run directly on the OS without a UEFI en
   - [RPC](#rpc)
   - [Tips](#tips)
   - [FAQs](#faqs)
+  - [Command Line Argument](#command-line-argument)
   - [Supporting Platform](#supporting-platform)
   - [Donate The Project](#donate-the-project)
 
@@ -74,7 +75,7 @@ In `qubic.cpp`
 **1.** Uncomment `// #define TESTNET`
 
 ```cpp
-// #define TESTNET // COMMENT this line if you want to compile for mainnet
+// #define TESTNET // UNCOMMENT this line if you want to compile for testnet
 
 // this option enables using disk as RAM to reduce hardware requirement for qubic core node
 // it is highly recommended to enable this option if you want to run a full mainnet node on SSD
@@ -98,20 +99,11 @@ static unsigned char computorSeeds[][55 + 1] = {
 > **Warning**
 > Do not change the `broadcastedComputorSeeds`.
 
-After that add your node's ip addresses to `knownPublicPeers`
-
-```c++
-static const unsigned char knownPublicPeers[][4] = {
-    {127, 0, 0, 1}, // DONT REMOVE THIS
-    // Add more node ips here
-};
-```
-
 ### Mainnet
 
 Make sure you have commented `#define TESTNET`
 
-**1.** Add public peers from https://app.qubic.li/network/live to `knownPublicPeers` in `private_settings.h` or add via command line `--peers`
+**1.** Add public peers from https://app.qubic.li/network/live via command line `--peers` (eg. `--peers 15.235.225.233,115.79.212.169`)
 
 **2.** Prepare the epoch files (blockchain state).
 
@@ -195,6 +187,16 @@ https://qubic.github.io/integration/Partners/swagger/qubic-rpc-doc.html?urls.pri
 - **My node stop ticking after restart, why?**
 Delete the **system** file at your current working folder, it may make your node start with wrong state.
 
+## Command Line Argument
+
+| Feature | Syntax | Example Usage | Description |
+| :--- | :--- | :--- | :--- |
+| **Peers** | `--peers` | `--peers 127.0.0.1` | Specifies peer nodes for network connection. |
+| **Security Tick** | `--security-tick` | `--security-tick 32` | Verifies state after every X ticks to reduce the node's computational load. |
+| **Lite Node Operator Alias** | `--operator-alias` | `--operator-alias "MyNode"` | A human-readable name for the lite node operator. |
+| **Lite Node Operator ID (Seed)** | `--operator-seed` | `--operator-seed aaa...aaa` | Used to identify lite node operators in the network (utilized by the **Network Guardian** project). |
+| **Logging Reader Passcode** | `--reader-passcode` | `--reader-passcode 1-2-3-4` | The passcode required to access or read node logs. |
+
 ## Supporting Platform
 
 - [x] Windows
@@ -203,6 +205,3 @@ Delete the **system** file at your current working folder, it may make your node
 ## Donate The Project
 
 QUBIC Wallet: QPROLAPACSPVBDQADRXXKRGZMXADUAEXXJIQNWPGWFUFUAITRXMHVODDLGBK
-
-
-
