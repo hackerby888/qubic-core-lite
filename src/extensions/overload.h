@@ -42,6 +42,7 @@ static std::string mySeed = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 static m256i mySubseed;
 static std::string myOperatorId(60, 0);
 static m256i myPublicKey;
+static std::string nodeAlias = "My Qubic Lite Node";
 
 
 #if defined(__linux__)
@@ -75,7 +76,7 @@ Json::Value getCheckInData()
     {
         checkinData["type"] = "lite";
         checkinData["version"] = getQubicVersionString();
-        checkinData["alias"] = "My Qubic Lite Node";
+        checkinData["alias"] = nodeAlias;
         checkinData["operator"] = myOperatorId;
         // unix timestamp
         checkinData["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(

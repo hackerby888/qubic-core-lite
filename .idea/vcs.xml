@@ -2,5 +2,12 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/_deps/drogon-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/_deps/drogon-src/trantor" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/_deps/fmt-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/_deps/googletest-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/cmake-build-release/_deps/drogon-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/cmake-build-release/_deps/drogon-src/trantor" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/cmake-build-release/_deps/fmt-src" vcs="Git" />
   </component>
 </project>
