@@ -549,6 +549,21 @@ public:
                                     }
                                     std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE retry failed\n";
                                     std::cout << "Error " << errno << ": " << strerror(errno) << "\n";
+                                    // Check alignment specifically
+                                    if (ucont.range.start % page_size != 0)
+                                    {
+                                        std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed due to unaligned address 0x"
+                                                  << std::hex << ucont.range.start << std::dec << "\n";
+                                    }
+                                    if (ucont.range.len % page_size != 0)
+                                    {
+                                        std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed due to unaligned length "
+                                                  << ucont.range.len << "\n";
+                                    }
+                                    if (errno != EEXIST)
+                                    {
+                                        std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed due to unexpected error (cannot ignored)\n";
+                                    }
                                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                                 }
                             }
