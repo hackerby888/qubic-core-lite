@@ -541,6 +541,16 @@ public:
                             if (ioctl(uffd.get(), UFFDIO_CONTINUE, &ucont) == -1)
                             {
                                 std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE failed\n";
+                                // retry
+                                while (true)
+                                {
+                                    if (ioctl(uffd.get(), UFFDIO_CONTINUE, &ucont) != -1) {
+                                        break;
+                                    }
+                                    std::cout << "Contract " << contractIndex << ": UFFDIO_CONTINUE retry failed\n";
+                                    std::cout << "Error " << errno << ": " << strerror(errno) << "\n";
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                                }
                             }
                         }
                     }
