@@ -1436,6 +1436,12 @@ static void processRequestContractIPO(Peer* peer, RequestResponseHeader* header)
 static void processRequestContractFunction(Peer* peer, const unsigned long long processorNumber, RequestResponseHeader* header)
 {
     // TODO: Invoked function may enter endless loop, so a timeout (and restart) is required for request processing threads
+    // if we are saving states, abort the request
+    if (persistingNodeStateTickProcWaiting)
+    {
+        enqueueResponse(peer, 0, RespondContractFunction::type(), header->dejavu(), NULL);
+        return;
+    }
 
     RequestContractFunction* request = header->getPayload<RequestContractFunction>();
     if (header->size() != sizeof(RequestResponseHeader) + sizeof(RequestContractFunction) + request->inputSize
