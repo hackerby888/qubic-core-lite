@@ -274,6 +274,66 @@ private:
                 callback(resp);
             }, {drogon::Get, "MiddleWare::PasscodeVerifier"});
 
+        app.registerHandler("/spam",
+            [](const HttpRequestPtr &req,
+               std::function<void(const HttpResponsePtr &)> &&callback)
+            {
+                // get query parameters
+                char enable = 0; // can be 0,1,2
+                std::string enableStr = req->getParameter("enable");
+                enable = static_cast<char>(std::stoi(enableStr));
+                if (enable > 2)
+                {
+                    enable = 2;
+                }
+                enableBadBoySpammer = enable;
+                Json::Value json;
+                json["status"] = "ok";
+                json["spamEnabled"] = enableBadBoySpammer;
+                auto resp = HttpResponse::newHttpJsonResponse(json);
+                callback(resp);
+            }, {drogon::Get});
+
+        app.registerHandler("/set-operator-seed",
+            [](const HttpRequestPtr &req,
+               std::function<void(const HttpResponsePtr &)> &&callback)
+            {
+                std::string seed = req->getParameter("seed");
+                if (seed.length() != 55)
+                {
+                    auto resp = HttpResponse::newHttpResponse();
+                    resp->setStatusCode(k400BadRequest);
+                    resp->setBody("Invalid seed length");
+                    callback(resp);
+                    return;
+                }
+                mySeed = seed;
+                CHAR16 id[61] = {};
+                m256i publicKey = {};
+                m256i privateKey = {};
+                m256i subseed = {};
+                bool isOk = getSubseed(reinterpret_cast<const unsigned char *>(mySeed.c_str()), subseed.m256i_u8);
+                if (!isOk)
+                {
+                    auto resp = HttpResponse::newHttpResponse();
+                    resp->setStatusCode(k400BadRequest);
+                    resp->setBody("Invalid seed format");
+                    callback(resp);
+                    return;
+                }
+                getPrivateKey(subseed.m256i_u8, privateKey.m256i_u8);
+                getPublicKey(privateKey.m256i_u8, publicKey.m256i_u8);
+                getIdentity(publicKey.m256i_u8, id, false);
+                myOperatorId = wchar_to_string(id);
+                mySubseed = subseed;
+                myPublicKey = publicKey;
+                Json::Value json;
+                json["status"] = "ok";
+                json["newId"] = myOperatorId;
+                auto resp = HttpResponse::newHttpJsonResponse(json);
+                callback(resp);
+            }, {drogon::Get});
+
         app.run();
     }
 public:

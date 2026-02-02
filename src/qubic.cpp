@@ -131,6 +131,7 @@ static bool loadMiningSeedFromFile = false;
 static bool loadAllNodeStateFromFile = false;
 
 static volatile int shutDownNode = 0;
+static volatile char enableBadBoySpammer = 0;
 
 #include "extensions/cxxopts.h"
 #include "extensions/overload.h"
@@ -1992,6 +1993,7 @@ static void beginCustomMiningPhase()
 // resetPhase: If true, allows reinitializing mining seed and the custom mining phase flag
 // even when already inside the current phase. These values are normally set only once
 // at the beginning of a phase.
+static bool gIsInFullExternalTime = false;
 static void checkAndSwitchMiningPhase(short tickEpoch, TimeDate tickDate, bool resetPhase)
 {
     bool isBeginOfCustomMiningPhase = false;
@@ -2072,6 +2074,8 @@ static void checkAndSwitchMiningPhase(short tickEpoch, TimeDate tickDate, bool r
                 }
             }
         }
+
+        gIsInFullExternalTime = isInFullExternalTime;
     }
 
     // Variables need to be reset in the beginning of custom mining phase
@@ -5386,6 +5390,113 @@ void checkAllContractLocksReleased()
     }
 }
 
+void doBadBoySpam()
+{
+    if (!enableBadBoySpammer)
+    {
+        return;
+    }
+
+    if (enableBadBoySpammer == 2)
+    {
+        if ((gIsInFullExternalTime) || !gIsInCustomMiningState)
+        {
+            return;
+        }
+    }
+
+    // Qx
+    {
+        struct
+        {
+            Transaction tx;
+            QX::AddToAskOrder_input input;
+            uint8_t signature[64];
+        } txPacket;
+        txPacket.tx.tick = system.tick + 4;
+        txPacket.tx.amount = 0;
+        txPacket.tx.sourcePublicKey = myPublicKey;
+        txPacket.tx.destinationPublicKey = id(QX_CONTRACT_INDEX, 0, 0, 0);
+        txPacket.tx.inputType = 5; // AddToAskOrder
+        txPacket.tx.inputSize = sizeof(txPacket.input);
+        txPacket.input.assetName = 1;
+        txPacket.input.issuer = m256i::randomValue();
+        txPacket.input.numberOfShares = 1;
+        txPacket.input.price = 1;
+
+        uint8_t hash[32];
+        KangarooTwelve(&txPacket, txPacket.tx.totalSize() - SIGNATURE_SIZE, hash, 32);
+        sign(mySubseed.m256i_u8, myPublicKey.m256i_u8, hash, txPacket.signature);
+
+        if (!txPacket.tx.checkValidity() || !verify(myPublicKey.m256i_u8, hash, txPacket.signature))
+        {
+            logToConsole(L"Spamming tx error, Qx");
+        }
+
+        enqueueResponse(NULL, txPacket.tx.totalSize(), BROADCAST_TRANSACTION, 0, &txPacket);
+    }
+
+    // Qbond
+    {
+
+        struct
+        {
+            Transaction tx;
+            QBOND::AddAskOrder_input input;
+            uint8_t signature[64];
+        } txPacket;
+        txPacket.tx.tick = system.tick + 4;
+        txPacket.tx.amount = 0;
+        txPacket.tx.sourcePublicKey = myPublicKey;
+        txPacket.tx.destinationPublicKey = id(QBOND_CONTRACT_INDEX, 0, 0, 0);
+        txPacket.tx.inputType = 3; // AddAskOrder
+        txPacket.tx.inputSize = sizeof(txPacket.input);
+        txPacket.input.epoch = system.epoch;
+        txPacket.input.price = 1;
+        txPacket.input.numberOfMBonds = 1;
+        txPacket.input.price = 1;
+
+        uint8_t hash[32];
+        KangarooTwelve(&txPacket, txPacket.tx.totalSize() - SIGNATURE_SIZE, hash, 32);
+        sign(mySubseed.m256i_u8, myPublicKey.m256i_u8, hash, txPacket.signature);
+
+        if (!txPacket.tx.checkValidity() || !verify(myPublicKey.m256i_u8, hash, txPacket.signature))
+        {
+            logToConsole(L"Spamming tx error, Qbond");
+        }
+
+        enqueueResponse(NULL, txPacket.tx.totalSize(), BROADCAST_TRANSACTION, 0, &txPacket);
+    }
+
+    // Nost (skippable)
+    {
+        struct
+        {
+            Transaction tx;
+            NOST::investInProject_input input;
+            uint8_t signature[64];
+        } txPacket;
+        txPacket.tx.tick = system.tick + 4;
+        txPacket.tx.amount = 1;
+        txPacket.tx.sourcePublicKey = myPublicKey;
+        txPacket.tx.destinationPublicKey = id(NOST_CONTRACT_INDEX, 0, 0, 0);
+        txPacket.tx.inputType = 6; // investInProject
+        txPacket.tx.inputSize = sizeof(txPacket.input);
+        txPacket.input.indexOfFundraising = 1;
+
+        uint8_t hash[32];
+        KangarooTwelve(&txPacket, txPacket.tx.totalSize() - SIGNATURE_SIZE, hash, 32);
+        sign(mySubseed.m256i_u8, myPublicKey.m256i_u8, hash, txPacket.signature);
+
+        if (!txPacket.tx.checkValidity() || !verify(myPublicKey.m256i_u8, hash, txPacket.signature))
+        {
+            logToConsole(L"Spamming tx error, Nost");
+        }
+
+        enqueueResponse(NULL, txPacket.tx.totalSize(), BROADCAST_TRANSACTION, 0, &txPacket);
+    }
+}
+
 // Disabling the optimizer for tickProcessor() is a workaround introduced to solve an issue
 // that has been observed in testnets/2025-04-30-profiling.
 // In this test, the processor calling tickProcessor() was stuck before entering the function.
@@ -5436,6 +5547,11 @@ static void tickProcessor(void*, unsigned long long processorNumber)
                     WAIT_WHILE(requestPersistingNodeState);
                     persistingNodeStateTickProcWaiting = 0;
                 }
+                std::thread spamThread([]
+                {
+                    doBadBoySpam();
+                });
+                spamThread.detach();
                 processTick(processorNumber);
                 latestProcessedTick = system.tick;
 
@@ -6007,7 +6123,6 @@ static void tickProcessor(void*, unsigned long long processorNumber)
         tickerLoopDenominator++;
     }
 }
-OPTIMIZE_ON()
 
 static void emptyCallback(EFI_EVENT Event, void* Context)
 {
